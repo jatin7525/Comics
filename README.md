@@ -39,3 +39,23 @@ node tests/prototype.cjs
 ```
 
 The test checks discovery, the guest limit, paid access, author submission, admin approval, publishing visibility, search, all main screens, mobile overflow, and browser errors. Screenshots are saved in `tests/`.
+
+## Cloudflare Pages from GitHub
+
+In Cloudflare, open **Workers & Pages → Create application → Pages → Import an existing Git repository**. Connect GitHub and select `jatin7525/prototype`.
+
+| Setting | Value |
+| --- | --- |
+| Project name | `astra-comics` (or another available name) |
+| Production branch | `main` |
+| Framework preset | None |
+| Build command | `node scripts/build.mjs` |
+| Build output directory | `dist` |
+| Root directory | Leave blank (repository root) |
+| Environment variables | None required |
+
+The build script requires Node.js 18 or later, with no dependency installation. It copies only the website and artwork into `dist/`. Documentation and browser tests are not deployed. Pushes to `main` deploy automatically when enabled in Cloudflare.
+
+Choose **Save and Deploy**. Cloudflare will provide the actual `pages.dev` URL when the deployment succeeds. The site remains a prototype with simulated authentication, payments, and admin permissions.
+
+To check the deployment output locally, run `node scripts/build.mjs`, then `python3 -m http.server 4174 --directory dist`.

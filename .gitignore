@@ -15,3 +15,6 @@ astra-comics-prototype.zip
 node_modules/
 tests/*.png
 .DS_Store
+
+# Generated deployment output
+dist/
