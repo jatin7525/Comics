@@ -73,3 +73,12 @@
 [data-theme="dark"] #toast{background:#ded5f4;color:#262033;box-shadow:0 6px 24px #0005}
 @media(max-width:600px){.top-actions{gap:8px}.theme-toggle{width:32px;height:32px}.search{width:120px}.topbar .primary{padding:10px 12px}.topbar{gap:8px}}
 @media(max-width:360px){.search{width:98px}.topbar{padding:0 12px}.topbar .primary{font-size:11px;padding:10px}}
+
+/* Astra Comics publisher wordmark. */
+.logo{gap:10px;letter-spacing:-1px}
+.logo-mark{width:34px;height:38px;display:grid;place-items:center;padding:3px;transform:none;border-radius:8px;color:#fff;flex-shrink:0}
+.logo-mark svg{width:28px;height:28px}
+.brand-name{display:flex;flex-direction:column;font:700 32px/.9 'Space Grotesk',sans-serif}
+.brand-name>span{font:600 9px 'DM Sans',sans-serif;letter-spacing:3.4px;margin:7px 0 0 2px}
+@media(min-width:601px) and (max-width:900px){.brand-name{display:none}.logo{justify-content:center}}
+@media(max-width:600px){.sidebar.open .logo{justify-content:flex-start}.sidebar.open .brand-name{display:flex}}

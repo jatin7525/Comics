@@ -1,6 +1,7 @@
 # Local personal documents and generated bundles
 *.docx
 panel-prototype.zip
+astra-comics-prototype.zip
 
 # Local environment and credentials
 .env

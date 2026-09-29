@@ -1,6 +1,6 @@
-# Panel: product direction and prototype review
+# Astra Comics: product direction and prototype review
 
-Panel is an independent comic publishing platform with three connected experiences: a public reading destination, an authorized creator studio, and an operational admin console. The name, stories, creators, illustrations, pricing, and metrics are sample content.
+Astra Comics is an independent comic publishing platform with three connected experiences: a public reading destination, an authorized creator studio, and an operational admin console. The name, stories, creators, illustrations, pricing, and metrics are sample content.
 
 ## The product promise
 
