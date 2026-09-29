@@ -1,0 +1,16 @@
+# Local personal documents and generated bundles
+*.docx
+panel-prototype.zip
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+.agents/
+
+# Dependencies and generated browser captures
+node_modules/
+tests/*.png
+.DS_Store
