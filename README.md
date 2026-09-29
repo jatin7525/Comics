@@ -22,6 +22,8 @@ No build step or frontend dependencies are required. All illustrations are local
 
 On mobile, the menu button opens navigation and the workspace selector.
 
+Use the sun/moon button in the header to switch themes. The initial theme follows your device; your manual choice is saved locally under `panel-theme`.
+
 Demo state persists in browser local storage under `panel-prototype`. Clear that key or browser site data to start fresh. Do not enter real credentials, bank information, or sensitive manuscript data.
 
 See `PRODUCT-REVIEW.md` for product decisions, revenue ideas, retention strategy, launch priorities, and explicit prototype limitations.
