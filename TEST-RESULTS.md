@@ -22,3 +22,7 @@ Screenshots: `tests/desktop.png`, `tests/mobile.png`, `tests/mobile-reader.png`,
 These are functional prototype checks, not a security audit, production payment test, or comprehensive accessibility certification.
 
 Dark theme verification: system preference, saved manual override after reload, all three workspaces, publishing form, comic dialogue contrast, and visible toggle/no horizontal overflow at 320px and 390px passed. No browser errors observed.
+
+## Next.js application
+
+The original prototype results above describe the static app. Verification of the new MongoDB/R2-backed application is recorded separately in [docs/VERIFICATION.md](docs/VERIFICATION.md).

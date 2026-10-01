@@ -1,0 +1,37 @@
+name: Application checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run local:init
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run db:up
+      - name: Start private R2 simulator
+        run: |
+          npm run storage:dev > /tmp/astra-r2.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:8788; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/astra-r2.log
+          exit 1
+      - run: npm run test:integration
+      - run: npm run build
+      - run: node scripts/build.mjs
+      - if: always()
+        run: npm run db:down

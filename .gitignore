@@ -18,3 +18,12 @@ tests/*.png
 
 # Generated deployment output
 dist/
+
+# Next.js and local service state
+.next/
+.local/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+test-results/
+playwright-report/

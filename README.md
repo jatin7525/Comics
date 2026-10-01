@@ -1,61 +1,81 @@
-# Astra Comics — comic publishing platform prototype
+# Astra Comics
 
-Open `index.html` directly, or serve this directory:
+A Next.js + TypeScript publishing application with MongoDB, private comic storage, reader accounts, Author Studio, and an editorial Admin console. The original HTML prototype remains at the repository root.
+
+## Run locally
+
+Requirements: Node.js 22 or newer, npm, and Docker Compose. Node.js 24 was used for verification.
 
 ```bash
-python3 -m http.server 4173
+npm ci
+npm run local:init
+npm run db:up
 ```
 
-Then visit http://localhost:4173.
+Start the persistent Cloudflare R2 simulator in a separate terminal:
 
-No build step or frontend dependencies are required. All illustrations are local SVG assets. Google Fonts loads the typography when online; fallback fonts work offline.
+```bash
+npm run storage:dev
+```
 
-## Suggested walkthrough
+Then seed local data and start Next.js:
 
-1. Open any comic as a guest. Read four pages, then try page five.
-2. Create a demo account with a fictional name/email. A free comic unlocks; a paid comic still needs the appropriate entitlement.
-3. Try Astra Plus and a purchase-only title to compare the two demo checkout flows.
-4. Save stories, follow creators, and return to Discover to see reading progress.
-5. Use the bottom-left workspace selector to open **Author Studio**. Create a publication and submit for review.
-6. Switch to **Admin console**, review the new submission, and approve it. Return to **Reader platform → All comics** to find the new title.
-7. Explore reports, author access, policies, ad placements, and the audit log.
+```bash
+npm run db:seed
+npm run dev
+```
 
-On mobile, the menu button opens navigation and the workspace selector.
+Open **http://localhost:3100**. Use this hostname consistently: mutations validate the configured `APP_ORIGIN`.
 
-Use the sun/moon button in the header to switch themes. The initial theme follows your device; your manual choice is saved locally under `panel-theme`.
+`local:init` creates an ignored `.env.local` with random secrets. Find the local demo password in its `SEED_PASSWORD` entry. Do not share or commit this file.
 
-The original internal storage keys are retained so the Astra Comics rename preserves existing reading progress and theme preferences.
+| Account | Access |
+| --- | --- |
+| reader@astra.test | Reader |
+| member@astra.test | Reader with a temporary, development-only membership |
+| author@astra.test | Author |
+| author2@astra.test | A different author for ownership testing |
+| admin@astra.test | Editorial administrator |
 
-Demo state persists in browser local storage under `panel-prototype`. Clear that key or browser site data to start fresh. Do not enter real credentials, bank information, or sensitive manuscript data.
+All seeded accounts use that local password. Seeding is restricted to local development and does not reset existing passwords. New registrations are always readers. Administrators can grant author access. There is no role-switching shortcut in the application.
 
-See `PRODUCT-REVIEW.md` for product decisions, revenue ideas, retention strategy, launch priorities, and explicit prototype limitations.
+MongoDB listens only on `127.0.0.1:27028`; the R2 simulator listens on `127.0.0.1:8788` and requires a server token. MongoDB uses a single-node replica set so publishing and audit transactions work locally. `npm run db:down` stops MongoDB without deleting its volume. R2 objects persist in `.local/r2`.
+
+## Implemented flows
+
+- Public discovery, search, genre/access filters, cursor pagination, artwork, creator profiles, light/dark themes, and wrapping mobile categories.
+- Exactly four guest preview pages per published comic. Subsequent free pages require login. Premium pages require the matching active entitlement, checked again at the image endpoint.
+- Persistent saved library, reading history, creator follows, and reports.
+- Author-owned drafts, image validation and WebP conversion, sequential page upload, rights declarations, age ratings, submission, and actionable editorial feedback.
+- Admin review, publication hiding, author permissions, account suspension/session revocation, reports, platform policies, and transactional audit records.
+
+**Payments are deliberately deferred.** Subscription/purchase controls cannot grant access. Ads currently mean a labeled house-promotion placement with an admin policy switch; no paid ad network or payout calculation is connected.
 
 ## Verification
 
-`tests/prototype.cjs` runs a browser smoke test with Playwright, if installed. It expects the local server on port 4173:
-
 ```bash
-node tests/prototype.cjs
+npm run lint
+npm run typecheck
+npm test
+npm run test:integration
+npm run build
 ```
 
-The test checks discovery, the guest limit, paid access, author submission, admin approval, publishing visibility, search, all main screens, mobile overflow, and browser errors. Screenshots are saved in `tests/`.
+Integration tests need MongoDB and the simulator running; they use an isolated temporary test database and clean it up. Browser tests need the seeded app running:
 
-## Cloudflare Pages from GitHub
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
 
-In Cloudflare, open **Workers & Pages → Create application → Pages → Import an existing Git repository**. Connect GitHub and select `jatin7525/prototype`.
+Browser tests create a sample publication in the development database and hide it after successful verification. They reset only the loopback authentication test counter for repeatability. Never point them at production. Screenshots and traces are ignored under `test-results/`.
 
-| Setting | Value |
-| --- | --- |
-| Project name | `astra-comics` (or another available name) |
-| Production branch | `main` |
-| Framework preset | None |
-| Build command | `node scripts/build.mjs` |
-| Build output directory | `dist` |
-| Root directory | Leave blank (repository root) |
-| Environment variables | None required |
+## Deployment
 
-The build script requires Node.js 18 or later, with no dependency installation. It copies only the website and artwork into `dist/`. Documentation and browser tests are not deployed. Pushes to `main` deploy automatically when enabled in Cloudflare.
+The existing Cloudflare static build remains **`node scripts/build.mjs`**, output **`dist`**. This still deploys the original HTML prototype. Connecting GitHub does not automatically convert that deployment into this backend application.
 
-Choose **Save and Deploy**. Cloudflare will provide the actual `pages.dev` URL when the deployment succeeds. The site remains a prototype with simulated authentication, payments, and admin permissions.
+The new application needs a Node.js runtime, reachable MongoDB replica set, and private R2 credentials. `npm run build` produces a Next.js standalone build. The included Dockerfile is a packaging option; its image has not been deployment-tested. Run `npm run db:indexes` as a controlled release step against the target database before traffic.
 
-To check the deployment output locally, run `node scripts/build.mjs`, then `python3 -m http.server 4174 --directory dist`.
+For real R2, configure `STORAGE_DRIVER=r2` and the server-only R2 variables in `.env.example`. Keep the bucket private. The adapter uses R2's S3 API; live cloud credentials have not been tested. Cloudflare Workers would require a separately validated Next.js adapter and compatibility checks for MongoDB and image processing. Do not change the live static pipeline to `next build` and expect it to work.
+
+See [architecture and scaling](docs/ARCHITECTURE.md), [security and release gaps](docs/SECURITY.md), and [verification](docs/VERIFICATION.md). Earlier product strategy is in [PRODUCT-REVIEW.md](PRODUCT-REVIEW.md).
