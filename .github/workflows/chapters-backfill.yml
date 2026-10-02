@@ -1,0 +1,39 @@
+name: Backfill comic chapters
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Write changes (leave unchecked for a dry run that only lists comics)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Give existing comics Chapter 1
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DATABASE: ${{ vars.MONGODB_DATABASE || 'astra_comics' }}
+          # The script only touches MongoDB; storage settings just satisfy configuration validation.
+          STORAGE_DRIVER: r2
+          APPLY: ${{ inputs.apply }}
+        run: |
+          if [ -z "$MONGODB_URI" ]; then
+            echo "Add the MONGODB_URI repository secret (Settings > Secrets and variables > Actions)." >&2
+            exit 1
+          fi
+          export RATE_LIMIT_SECRET="$(openssl rand -hex 32)"
+          if [ "$APPLY" = "true" ]; then
+            npx tsx scripts/chapters-backfill.ts --apply
+          else
+            npx tsx scripts/chapters-backfill.ts
+          fi
