@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/server/session";
 import { getServices } from "@/server/services";
 import { Intro, Status, accessLabels } from "@/components/ui";
-import { ReviewForm } from "@/components/admin-actions";
+import { ReleaseReviewForm, ReviewForm } from "@/components/admin-actions";
 import { chapterRanges } from "@/domain/chapters";
 export default async function Review({
   params,
@@ -16,16 +16,23 @@ export default async function Review({
   if (!publication) notFound();
   const pages = await services.publications.pages(id);
   const chapters = chapterRanges(publication);
+  const release = publication.release;
+  const releasePages = pages.filter(
+    (page) => page.number > publication.pageCount,
+  );
+  const publicPages = pages.filter(
+    (page) => page.number <= publication.pageCount,
+  );
   const groups = chapters.length
     ? chapters.map((chapter) => ({
         key: chapter.id,
         heading: `Chapter ${chapter.number} · ${chapter.title}`,
-        pages: pages.filter(
+        pages: publicPages.filter(
           (page) =>
             page.number >= chapter.startPage && page.number <= chapter.endPage,
         ),
       }))
-    : [{ key: "all", heading: null, pages }];
+    : [{ key: "all", heading: null, pages: publicPages }];
   return (
     <>
       <Intro
@@ -45,6 +52,12 @@ export default async function Review({
           )}
           <p>{publication.synopsis}</p>
           <dl className="review-facts">
+            <dt>Type</dt>
+            <dd>
+              {publication.original
+                ? "Original (platform publication)"
+                : "Independent creator"}
+            </dd>
             <dt>Access</dt>
             <dd>{accessLabels[publication.access]}</dd>
             <dt>Price (INR)</dt>
@@ -83,17 +96,61 @@ export default async function Review({
             </div>
           )}
         </section>
-        <ReviewForm
-          id={id}
-          version={publication.version}
-          reviewable={
-            publication.status === "submitted" &&
-            publication.authorId !== user.id
-          }
-        />
+        {release ? (
+          <ReleaseReviewForm
+            id={id}
+            version={publication.version}
+            reviewable={
+              release.status === "submitted" &&
+              (publication.authorId !== user.id || !!publication.original)
+            }
+          />
+        ) : (
+          <ReviewForm
+            id={id}
+            version={publication.version}
+            reviewable={
+              publication.status === "submitted" &&
+              (publication.authorId !== user.id || !!publication.original)
+            }
+          />
+        )}
       </div>
+      {release && (
+        <section className="panel">
+          <h2>
+            New chapter: {release.title} ({release.status.replace("_", " ")})
+          </h2>
+          <p className="muted">
+            {releasePages.length} new pages, to be published as pages{" "}
+            {publication.pageCount + 1}–
+            {publication.pageCount + releasePages.length}. Readers cannot see
+            them until approved.
+          </p>
+          <div className="page-thumbnails">
+            {releasePages.map((page) => (
+              <figure key={page.id}>
+                <a
+                  href={`/api/studio/${id}/media/${page.number}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <img
+                    loading="lazy"
+                    src={`/api/studio/${id}/media/${page.number}`}
+                    alt={page.alt}
+                  />
+                </a>
+                <figcaption>
+                  New page {page.number - publication.pageCount}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="panel">
-        <h2>Review every page</h2>
+        <h2>{release ? "Published pages" : "Review every page"}</h2>
         {groups.map((group) => (
           <div key={group.key}>
             {group.heading && <h3>{group.heading}</h3>}

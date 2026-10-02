@@ -4,6 +4,7 @@ import type { PublicationRepository } from "@/application/ports";
 import type {
   AuditEvent,
   CatalogQuery,
+  Chapter,
   ComicPage,
   Publication,
 } from "@/domain/models";
@@ -29,6 +30,7 @@ export class MongoPublications implements PublicationRepository {
     };
     if (query.genre) filter.genre = query.genre;
     if (query.access) filter.access = query.access;
+    if (query.original) filter.original = true;
     if (query.search) filter.$text = { $search: query.search };
     if (query.cursor) {
       try {
@@ -307,6 +309,116 @@ export class MongoPublications implements PublicationRepository {
           { session },
         );
         return result.modifiedCount === 1;
+      }),
+    );
+  }
+  async addReleasePage(publication: Publication, page: ComicPage) {
+    const db = await database();
+    return (await mongoClient()).withSession((session) =>
+      session.withTransaction(async () => {
+        const now = new Date();
+        const result = await db
+          .collection<PublicationDoc>("publications")
+          .updateOne(
+            {
+              _id: publication.id,
+              version: publication.version,
+              status: "published",
+              "release.status": { $in: ["draft", "changes_requested"] },
+            },
+            {
+              $inc: { "release.pageCount": 1, version: 1 },
+              $set: { updatedAt: now, "release.updatedAt": now },
+            },
+            { session },
+          );
+        if (result.modifiedCount !== 1) return false;
+        await db
+          .collection<PageDoc>("pages")
+          .insertOne(toDocument(page), { session });
+        return true;
+      }),
+    );
+  }
+  async discardRelease(id: string, version: number) {
+    const db = await database();
+    return (await mongoClient()).withSession((session) =>
+      session.withTransaction(async () => {
+        const publications = db.collection<PublicationDoc>("publications");
+        const publication = await publications.findOne(
+          { _id: id, version, release: { $type: "object" } },
+          { session },
+        );
+        if (!publication) return null;
+        const pages = db.collection<PageDoc>("pages");
+        const pending = await pages
+          .find(
+            { comicId: id, number: { $gt: publication.pageCount } },
+            { session },
+          )
+          .toArray();
+        await pages.deleteMany(
+          { comicId: id, number: { $gt: publication.pageCount } },
+          { session },
+        );
+        await publications.updateOne(
+          { _id: id, version },
+          {
+            $set: { release: null, updatedAt: new Date() },
+            $inc: { version: 1 },
+          },
+          { session },
+        );
+        return pending.map((page) => page.storageKey);
+      }),
+    );
+  }
+  async approveRelease(
+    id: string,
+    version: number,
+    chapters: Chapter[],
+    audit: AuditEvent,
+  ) {
+    const db = await database();
+    return (await mongoClient()).withSession((session) =>
+      session.withTransaction(async () => {
+        const publications = db.collection<PublicationDoc>("publications");
+        const publication = await publications.findOne(
+          {
+            _id: id,
+            version,
+            status: "published",
+            "release.status": "submitted",
+          },
+          { session },
+        );
+        if (!publication?.release) return false;
+        // Count the stored pages rather than trusting the counter, so readers can never be sent past the last page.
+        const stored = await db
+          .collection<PageDoc>("pages")
+          .countDocuments(
+            { comicId: id, number: { $gt: publication.pageCount } },
+            { session },
+          );
+        if (stored !== publication.release.pageCount || stored < 1)
+          return false;
+        await publications.updateOne(
+          { _id: id, version },
+          {
+            $set: {
+              pageCount: publication.pageCount + stored,
+              chapters,
+              release: null,
+              updatedAt: new Date(),
+            },
+            $inc: { version: 1 },
+          },
+          { session },
+        );
+        await db
+          .collection<AuditDoc>("audit")
+          .insertOne(toDocument(audit), { session });
+        return true;
       }),
     );
   }

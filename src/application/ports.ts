@@ -2,6 +2,7 @@ import type {
   Account,
   AuditEvent,
   CatalogQuery,
+  Chapter,
   ComicPage,
   DashboardMetrics,
   Entitlement,
@@ -49,6 +50,15 @@ export interface PublicationRepository {
   ): Promise<boolean>;
   related(publication: Publication): Promise<Publication[]>;
   addPage(publication: Publication, page: ComicPage): Promise<boolean>;
+  addReleasePage(publication: Publication, page: ComicPage): Promise<boolean>;
+  // Deletes the unreleased pages and clears the release; returns their storage keys, or null on conflict.
+  discardRelease(id: string, version: number): Promise<string[] | null>;
+  approveRelease(
+    id: string,
+    version: number,
+    chapters: Chapter[],
+    audit: AuditEvent,
+  ): Promise<boolean>;
 }
 export interface EntitlementRepository {
   forReader(userId: string, comicId: string): Promise<Entitlement[]>;
@@ -71,13 +81,15 @@ export interface CommunityRepository {
 }
 export interface AdministrationRepository {
   reviewQueue(): Promise<Publication[]>;
+  releaseQueue(): Promise<Publication[]>;
   content(): Promise<Publication[]>;
   users(): Promise<User[]>;
   audit(): Promise<AuditEvent[]>;
   reports(): Promise<ReaderReport[]>;
   policy(): Promise<PlatformPolicy>;
   updatePolicy(
-    patch: Pick<PlatformPolicy, "adsEnabled" | "submissionsEnabled">,
+    patch: Pick<PlatformPolicy, "adsEnabled" | "submissionsEnabled"> &
+      Partial<Pick<PlatformPolicy, "siteName">>,
     audit: AuditEvent,
   ): Promise<void>;
   updateUser(

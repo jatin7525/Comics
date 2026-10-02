@@ -49,7 +49,9 @@ MongoDB listens only on `127.0.0.1:27028`; the R2 simulator listens on `127.0.0.
 - Exactly four guest preview pages per published comic. Subsequent free pages require login. Premium pages require the matching active entitlement, checked again at the image endpoint.
 - Persistent saved library, reading history, creator follows, and reports.
 - Author-owned drafts, image validation and WebP conversion, sequential page upload, rights declarations, age ratings, submission, and actionable editorial feedback.
-- Named comic chapters with chapter navigation for readers; the four-page guest preview still applies per comic. See [Studio publishing](docs/STUDIO-PUBLISHING.md#chapters).
+- Named comic chapters with chapter navigation for readers; the four-page guest preview still applies per comic. Authors add new chapters to published comics through editorial review. See [Studio publishing](docs/STUDIO-PUBLISHING.md#chapters).
+- Originals: work published by administrators is labelled as the platform's own and listed at `/originals`. The site name is set by administrators in Admin → Policies rather than hard-coded.
+- One administrator account signs in to Reader, Studio and Admin with the same email and password (a separate sign-in per site, by design).
 - Admin review, publication hiding, author permissions, account suspension/session revocation, reports, platform policies, and transactional audit records.
 
 **Payments are deliberately deferred.** Subscription/purchase controls cannot grant access. Ads currently mean a labeled house-promotion placement with an admin policy switch; no paid ad network or payout calculation is connected.

@@ -36,7 +36,7 @@ export function api(
         ensure(
           request.headers.get("origin") === new URL(env.APP_ORIGIN).origin,
           "INVALID_ORIGIN",
-          "This request must come from Astra Comics.",
+          "This request must come from this site.",
           403,
         );
       const services = getServices();

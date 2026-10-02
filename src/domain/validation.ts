@@ -66,6 +66,10 @@ export const catalogSchema = z.object({
   cursor: z.string().max(240).optional(),
   limit: z.coerce.number().int().min(1).max(24).default(12),
   kind: z.enum(["comic", "artwork"]).default("comic"),
+  original: z
+    .enum(["true"])
+    .optional()
+    .transform((value) => (value ? true : undefined)),
 });
 export const reviewSchema = z
   .object({
@@ -92,11 +96,37 @@ export const userUpdateSchema = z
   })
   .strict();
 export const policySchema = z
-  .object({ adsEnabled: z.boolean(), submissionsEnabled: z.boolean() })
+  .object({
+    adsEnabled: z.boolean(),
+    submissionsEnabled: z.boolean(),
+    siteName: z
+      .string()
+      .trim()
+      .min(2, "Use at least 2 characters for the site name.")
+      .max(40)
+      .optional(),
+  })
   .strict();
 export const progressSchema = z
   .object({ page: z.number().int().min(1) })
   .strict();
+export const releaseTitleSchema = z
+  .object({
+    version: z.number().int().min(1),
+    title: z.string().trim().min(1, "Give the chapter a title.").max(100),
+  })
+  .strict();
+export const releaseReviewSchema = z
+  .object({
+    version: z.number().int().min(1),
+    decision: z.enum(["approved", "changes_requested"]),
+    note: z.string().trim().max(1000),
+  })
+  .strict()
+  .refine((value) => value.decision === "approved" || value.note.length >= 10, {
+    message: "Give the author at least 10 characters of actionable feedback.",
+    path: ["note"],
+  });
 export const pageBatchSchema = z.object({
   from: z.coerce.number().int().min(1),
   limit: z.coerce.number().int().min(1).max(10).default(4),

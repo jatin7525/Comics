@@ -2600,3 +2600,10 @@ button:disabled {
   .reader-toolbar .secondary span { display:none; }
   .reader-position { width:100%; margin-left:0; text-align:center; }
 }
+.original-tag { background:var(--purple); color:#fff; border-color:var(--purple); }
+[data-theme="dark"] .original-tag { color:#181e2a; }
+.chapter-release { border-top:1px solid var(--line); padding-top:24px; margin-bottom:24px; }
+.chapter-release h4 { margin:20px 0 8px; font-size:14px; }
+.release-start { display:flex; flex-wrap:wrap; gap:12px; align-items:end; }
+.release-start .field { flex:1 1 260px; margin:0; }
+.release-queue { list-style:none; padding:0; margin:0; display:grid; gap:10px; overflow-wrap:anywhere; }

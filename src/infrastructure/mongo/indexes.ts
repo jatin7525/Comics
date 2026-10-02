@@ -37,13 +37,17 @@ export async function ensureIndexes() {
     db.collection("publications").createIndex({ authorId: 1, updatedAt: -1 }),
     db
       .collection("publications")
-      .createIndex({
-        title: "text",
-        authorName: "text",
-        synopsis: "text",
-        tags: "text",
-        previewText: "text",
-      }),
+      .createIndex({ status: 1, kind: 1, original: 1, createdAt: -1, _id: -1 }),
+    db
+      .collection("publications")
+      .createIndex({ "release.status": 1, updatedAt: 1 }),
+    db.collection("publications").createIndex({
+      title: "text",
+      authorName: "text",
+      synopsis: "text",
+      tags: "text",
+      previewText: "text",
+    }),
     db
       .collection("pages")
       .createIndex({ comicId: 1, number: 1 }, { unique: true }),

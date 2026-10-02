@@ -9,11 +9,13 @@ import { GenreFilters } from "@/components/genre-filters";
 export default async function Discover() {
   const services = getServices();
   const user = await currentUser();
-  const [catalog, history, policy] = await Promise.all([
+  const [catalog, history, policy, originals] = await Promise.all([
     services.publications.catalog({ limit: 4, kind: "comic" }),
     user ? services.community.library(user.id, true) : Promise.resolve([]),
     services.administration.policy(),
+    services.publications.catalog({ limit: 4, kind: "comic", original: true }),
   ]);
+  const name = policy.siteName;
   const featured = catalog.items[0];
   return (
     <>
@@ -107,9 +109,20 @@ export default async function Discover() {
         linkText="View all comics"
       />
       <ComicGrid comics={catalog.items.map(comicCard)} />
+      {!!originals.items.length && (
+        <>
+          <SectionHeading
+            title={`${name} Originals`}
+            description="Stories from our own universe, made in-house."
+            href="/originals"
+            linkText="All originals"
+          />
+          <ComicGrid comics={originals.items.map(comicCard)} />
+        </>
+      )}
       {policy.adsEnabled && (
         <div className="ad">
-          <div className="ad-symbol">a.</div>
+          <div className="ad-symbol">{name.charAt(0).toLowerCase()}.</div>
           <div className="ad-copy">
             <strong>Good stories start with people who care.</strong>
             <p>
@@ -119,7 +132,7 @@ export default async function Discover() {
           </div>
           <span className="ad-label">House promotion</span>
           <Link href="/about" className="secondary">
-            Meet Astra Comics
+            Meet {name}
             <ArrowRight size={15} />
           </Link>
         </div>

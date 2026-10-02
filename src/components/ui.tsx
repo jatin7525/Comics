@@ -6,7 +6,7 @@ import type { ComicCardData } from "@/server/dto";
 
 export const accessLabels = {
   free: "Free with an account",
-  membership: "Astra Plus",
+  membership: "Membership",
   purchase: "Individual purchase",
   both: "Membership or purchase",
 };
@@ -138,7 +138,11 @@ export function ComicCard({ comic }: { comic: ComicCardData }) {
               : "✧ Premium"}
         </span>
         <span className="cover-title">
-          <small>AN ASTRA COMICS ORIGINAL</small>
+          <small>
+            {comic.original
+              ? "★ ORIGINAL"
+              : `BY ${comic.authorName.toUpperCase()}`}
+          </small>
           {comic.title}
         </span>
       </Link>

@@ -438,6 +438,202 @@ describe("persistent publishing workflow", { concurrency: false }, () => {
       .updateMany({ userId: author.id }, { $set: { expiresAt: new Date(0) } });
     await assert.rejects(reading.image(created.id, 5, author), /entitlement/);
   });
+  it("adds a reviewed chapter to a published comic without exposing it early", async () => {
+    let current = (await publications.find(created.id))!;
+    const startPages = current.pageCount;
+    await assert.rejects(
+      publishing.startRelease(other, created.id, current.version, "Return"),
+      /not found/,
+    );
+    await assert.rejects(
+      publishing.startRelease(
+        author,
+        created.id,
+        current.version - 1,
+        "Return",
+      ),
+      /changed/,
+    );
+    await publishing.startRelease(
+      author,
+      created.id,
+      current.version,
+      "Return",
+    );
+    current = (await publications.find(created.id))!;
+    await assert.rejects(
+      publishing.startRelease(author, created.id, current.version, "Again"),
+      /already preparing/,
+    );
+    for (const n of [1, 2]) {
+      current = (await publications.find(created.id))!;
+      await publishing.uploadReleasePage(
+        author,
+        created.id,
+        current.version,
+        image,
+        `New chapter page ${n}.`,
+      );
+    }
+    current = (await publications.find(created.id))!;
+    assert.equal(current.pageCount, startPages);
+    assert.equal(current.release?.pageCount, 2);
+    await assert.rejects(
+      reading.image(created.id, startPages + 1, author),
+      /entitlement|not available/,
+    );
+    await assert.rejects(
+      reading.pages(created.id, startPages + 1, 2, author),
+      /not available/,
+    );
+    await publishing.submitRelease(author, created.id, current.version);
+    current = (await publications.find(created.id))!;
+    await assert.rejects(
+      publishing.uploadReleasePage(
+        author,
+        created.id,
+        current.version,
+        image,
+        "Late page added.",
+      ),
+      /awaiting review/,
+    );
+    await assert.rejects(
+      admin.reviewRelease(author, created.id, {
+        version: current.version,
+        decision: "approved",
+        note: "",
+      }),
+      /Administrator/,
+    );
+    await admin.reviewRelease(moderator, created.id, {
+      version: current.version,
+      decision: "changes_requested",
+      note: "Please add a closing page.",
+    });
+    current = (await publications.find(created.id))!;
+    assert.equal(current.release?.status, "changes_requested");
+    await publishing.submitRelease(author, created.id, current.version);
+    current = (await publications.find(created.id))!;
+    const decisions = await Promise.allSettled([
+      admin.reviewRelease(moderator, created.id, {
+        version: current.version,
+        decision: "approved",
+        note: "",
+      }),
+      admin.reviewRelease(moderator, created.id, {
+        version: current.version,
+        decision: "approved",
+        note: "",
+      }),
+    ]);
+    assert.equal(
+      decisions.filter((result) => result.status === "fulfilled").length,
+      1,
+    );
+    current = (await publications.find(created.id))!;
+    assert.equal(current.pageCount, startPages + 2);
+    assert.equal(current.release, null);
+    assert.deepEqual(current.chapters?.at(-1)?.title, "Return");
+    assert.equal(current.chapters?.at(-1)?.startPage, startPages + 1);
+    assert.equal(
+      await (
+        await database()
+      )
+        .collection("audit")
+        .countDocuments({
+          targetId: created.id,
+          action: "chapter_release.approved",
+        }),
+      1,
+    );
+    // Discarding an unfinished chapter deletes its pages and stored images.
+    await publishing.startRelease(author, created.id, current.version, "Draft");
+    current = (await publications.find(created.id))!;
+    await publishing.uploadReleasePage(
+      author,
+      created.id,
+      current.version,
+      image,
+      "A page to discard.",
+    );
+    const discarded = (await publications.page(created.id, startPages + 3))!;
+    current = (await publications.find(created.id))!;
+    await publishing.discardRelease(author, created.id, current.version);
+    assert.equal(await publications.page(created.id, startPages + 3), null);
+    assert.equal(await storage.get(discarded.storageKey), null);
+    assert.equal((await publications.find(created.id))?.release, null);
+  });
+  it("marks administrator work as Originals that its creator may publish", async () => {
+    const authored = await publishing.create(author, {
+      ...input,
+      title: "An independent story",
+    });
+    assert.equal(authored.original, false);
+    const original = await publishing.create(moderator, {
+      ...input,
+      title: "An in-house universe",
+      access: "free",
+    });
+    assert.equal(original.original, true);
+    let current = original;
+    await publishing.upload(
+      moderator,
+      original.id,
+      current.version,
+      "cover",
+      image,
+      "Original cover art.",
+    );
+    for (let page = 1; page <= 5; page++) {
+      current = (await publications.find(original.id))!;
+      await publishing.upload(
+        moderator,
+        original.id,
+        current.version,
+        "page",
+        image,
+        `Original page ${page}.`,
+      );
+    }
+    current = (await publications.find(original.id))!;
+    await publishing.submit(moderator, original.id, current.version);
+    current = (await publications.find(original.id))!;
+    await admin.review(moderator, original.id, {
+      version: current.version,
+      decision: "published",
+      note: "",
+    });
+    const originals = await publications.catalog({
+      kind: "comic",
+      limit: 12,
+      original: true,
+    });
+    assert.deepEqual(
+      originals.items.map((item) => item.id),
+      [original.id],
+    );
+    // Keep the shared catalog empty for later tests.
+    current = (await publications.find(original.id))!;
+    await admin.hide(
+      moderator,
+      original.id,
+      current.version,
+      "Removing the test original after verification.",
+    );
+  });
+  it("stores an administrator-chosen site name", async () => {
+    assert.equal(
+      (await adminRepo.policy()).siteName,
+      process.env.SITE_NAME || "Astra Comics",
+    );
+    await admin.policy(moderator, {
+      adsEnabled: true,
+      submissionsEnabled: true,
+      siteName: "Nova Panels",
+    });
+    assert.equal((await adminRepo.policy()).siteName, "Nova Panels");
+  });
   it("removes hidden publications from both discovery and direct media", async () => {
     const current = (await publications.find(created.id))!;
     await admin.hide(

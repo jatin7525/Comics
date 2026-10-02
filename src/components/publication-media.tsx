@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { requestJson } from "./mutation";
 import type { EditorData } from "./publication-editor";
 import { ChapterEditor, type ChapterDraft } from "./chapter-editor";
+import { ChapterReleasePanel } from "./chapter-release";
 
 export function LocalPreview({ file }: { file: File }) {
   const ref = useRef<HTMLImageElement>(null);
@@ -30,7 +31,10 @@ export function PublicationMedia({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [progress, setProgress] = useState("");
-  const pages = publication.pages ?? [];
+  // Pages beyond pageCount belong to an unreleased chapter and are managed in the release panel.
+  const pages = (publication.pages ?? []).filter(
+    (page) => page.number <= publication.pageCount,
+  );
   const page = pages.find((page) => page.id === selected) ?? pages[0];
   const editable = ["draft", "changes_requested"].includes(publication.status);
   const chapters = publication.chapters ?? [];
@@ -373,6 +377,15 @@ export function PublicationMedia({
             ))}
           </div>
         </>
+      )}
+      {publication.kind === "comic" && publication.status === "published" && (
+        <ChapterReleasePanel
+          key={`${publication.release?.id ?? "none"}-${publication.version}`}
+          publication={publication}
+          busy={busy}
+          run={run}
+          reload={reload}
+        />
       )}
       {publication.kind === "comic" && (
         <ChapterEditor
