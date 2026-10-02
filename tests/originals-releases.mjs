@@ -208,8 +208,110 @@ try {
   await expect(
     home.getByRole("heading", { name: "Chapter 2 · The second arc" }),
   ).toBeVisible();
+
+  // The author edits the live comic directly; every change is immediate.
+  page.on("dialog", (dialog) =>
+    dialog.type() === "prompt"
+      ? dialog.accept("Journey serial comic, renamed")
+      : dialog.accept(),
+  );
+  await page.goto(`/studio/publications/${comic._id}`);
+  await expect(page.getByText(/This work is live/)).toBeVisible();
+  await page
+    .getByLabel("Title", { exact: true })
+    .fill("Journey serial comic, renamed");
+  await page
+    .getByRole("button", { name: "Save & continue", exact: true })
+    .click();
+  await page.getByLabel("Select comic pages").waitFor();
+  await home.goto(`/comics/${comic.slug}`);
+  await expect(
+    home.getByRole("heading", { name: "Journey serial comic, renamed" }),
+  ).toBeVisible();
+
+  const savedPages = () =>
+    db
+      .collection("pages")
+      .find({ comicId: comic._id })
+      .sort({ number: 1 })
+      .toArray();
+  await page.getByLabel("Select comic pages").setInputFiles({
+    name: "insert.png",
+    mimeType: "image/png",
+    buffer: image,
+  });
+  await page
+    .getByLabel("Add these pages to")
+    .selectOption({ label: "The end of chapter 1: Chapter 1" });
+  await page
+    .getByRole("button", { name: "Upload selected images (1)", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Saved pages · 8" }),
+  ).toBeVisible();
+  let stored = await db.collection("publications").findOne({ _id: comic._id });
+  assert.deepEqual(
+    stored.chapters.map((chapter) => chapter.startPage),
+    [1, 7],
+  );
+  assert.equal((await savedPages())[5].alt, "Comic page: insert.png");
+
+  const before = (await savedPages())[0].storageKey;
+  await page.getByLabel("Replace image for page 1").setInputFiles({
+    name: "replacement.png",
+    mimeType: "image/png",
+    buffer: image,
+  });
+  await expect
+    .poll(async () => (await savedPages())[0].storageKey)
+    .not.toBe(before);
+
+  await page
+    .getByRole("button", { name: "Remove page 2", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Saved pages · 7" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "test-results/studio-manage-live.png",
+    fullPage: true,
+  });
+
+  await page
+    .getByRole("button", {
+      name: "Delete chapter 2 and its pages",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Saved pages · 5" }),
+  ).toBeVisible();
+  stored = await db.collection("publications").findOne({ _id: comic._id });
+  assert.deepEqual(
+    stored.chapters.map((chapter) => chapter.title),
+    ["Chapter 1"],
+  );
+  assert.equal(stored.pageCount, 5);
+
+  await page.getByRole("button", { name: /Review/ }).click();
+  await page
+    .getByRole("button", { name: "Delete permanently", exact: true })
+    .click();
+  await page.waitForURL(/\/studio\/publications$/);
+  assert.equal(
+    await db.collection("publications").countDocuments({ _id: comic._id }),
+    0,
+  );
+  assert.equal(
+    await db.collection("pages").countDocuments({ comicId: comic._id }),
+    0,
+  );
+  await home.goto(`/comics/${comic.slug}`);
+  await expect(
+    home.getByRole("heading", { name: "This page has left the story." }),
+  ).toBeVisible();
   console.log(
-    "Originals, site name, shared admin sign-in and chapter releases passed.",
+    "Originals, site name, shared admin sign-in, chapter releases and live comic management passed.",
   );
 } finally {
   for (const id of ids) {

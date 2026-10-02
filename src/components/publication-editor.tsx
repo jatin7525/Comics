@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   genres,
   type AccessModel,
@@ -44,6 +45,7 @@ export function PublicationEditor({
   publication?: EditorData;
   initialKind?: PublicationKind;
 }) {
+  const router = useRouter();
   const [draft, setDraft] = useState(publication);
   const [kind, setKind] = useState<PublicationKind | undefined>(
     publication?.kind ?? initialKind,
@@ -55,7 +57,9 @@ export function PublicationEditor({
     publication?.access ?? "free",
   );
   const editable =
-    !draft || ["draft", "changes_requested"].includes(draft.status);
+    !draft ||
+    ["draft", "changes_requested", "published"].includes(draft.status);
+  const live = draft?.status === "published";
   const steps = [
     "Details",
     kind === "artwork" ? "Artwork" : "Pages & text",
@@ -163,6 +167,11 @@ export function PublicationEditor({
           </button>
         ))}
       </nav>
+      {live && (
+        <div className="notice" role="status">
+          This work is live. Changes you save appear to readers immediately.
+        </div>
+      )}
       {draft?.feedback && (
         <div className="notice">Editorial feedback: {draft.feedback}</div>
       )}
@@ -341,7 +350,7 @@ export function PublicationEditor({
       )}
       {step === 3 && draft && (
         <>
-          <h2>Review before submission</h2>
+          <h2>{live ? "Published work" : "Review before submission"}</h2>
           <div className="publication-review">
             {draft.hasCover && (
               <img
@@ -378,10 +387,13 @@ export function PublicationEditor({
               {draft.rightsConfirmed ? "✓" : "○"} Publishing rights confirmed
             </li>
           </ul>
-          <p className="muted">
-            Submitting locks editing until the editorial team reviews your work.
-          </p>
-          {editable && (
+          {!live && (
+            <p className="muted">
+              Submitting locks editing until the editorial team reviews your
+              work.
+            </p>
+          )}
+          {editable && !live && (
             <button
               className="primary"
               disabled={
@@ -419,6 +431,47 @@ export function PublicationEditor({
               Submitted. Your work is awaiting editorial review.
             </div>
           )}
+          <section className="danger-zone" aria-labelledby="danger-heading">
+            <h3 id="danger-heading">
+              Delete this {kind === "comic" ? "comic" : "artwork"}
+            </h3>
+            <p className="muted">
+              Permanently removes it, every page and image, and readers’ saved
+              copies and progress. This cannot be undone.
+            </p>
+            <button
+              type="button"
+              className="danger"
+              disabled={busy}
+              onClick={async () => {
+                const typed = window.prompt(
+                  `Type the title to permanently delete it:\n${draft.title}`,
+                );
+                if (typed?.trim() !== draft.title.trim()) {
+                  if (typed !== null)
+                    setError("The title did not match. Nothing was deleted.");
+                  return;
+                }
+                setBusy(true);
+                setError("");
+                try {
+                  await requestJson(
+                    `/api/publications/${draft.id}`,
+                    { version: draft.version },
+                    "DELETE",
+                  );
+                  router.push("/studio/publications");
+                } catch (e) {
+                  setError(
+                    e instanceof Error ? e.message : "Could not delete.",
+                  );
+                  setBusy(false);
+                }
+              }}
+            >
+              Delete permanently
+            </button>
+          </section>
         </>
       )}
       <p role="alert" className="form-error">

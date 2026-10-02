@@ -1,1 +1,4 @@
-export { editPage as PATCH } from "@/server/handlers/publications";
+export {
+  editPage as PATCH,
+  removePage as DELETE,
+} from "@/server/handlers/publications";
