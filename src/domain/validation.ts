@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { genres } from "./models";
+import { MAX_CHAPTERS } from "./chapters";
 
 export const idSchema = z.string().uuid();
 export const registerSchema = z
@@ -97,3 +98,18 @@ export const progressSchema = z
   .object({ page: z.number().int().min(1) })
   .strict();
 export const toggleSchema = z.object({ enabled: z.boolean() }).strict();
+
+export const chapterInputSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    title: z.string().trim().min(1, "Give every chapter a title.").max(100),
+    startPage: z.number().int().min(1),
+  })
+  .strict();
+export const chaptersSchema = z
+  .object({
+    version: z.number().int().min(1),
+    chapters: z.array(chapterInputSchema).max(MAX_CHAPTERS),
+  })
+  .strict();
+export type ChapterInput = z.infer<typeof chapterInputSchema>;

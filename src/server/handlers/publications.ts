@@ -12,6 +12,7 @@ import {
   updatePublicationSchema,
   versionSchema,
   pageTextSchema,
+  chaptersSchema,
 } from "@/domain/validation";
 import { ensure } from "@/domain/errors";
 import { canManagePublication } from "@/domain/access";
@@ -188,6 +189,19 @@ export const editPage = api(
       idSchema.parse(context.params.pageId),
       input.alt,
       input.storyText,
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
+export const setChapters = api(
+  async (context) => {
+    const input = await jsonInput(context.request, chaptersSchema);
+    await getServices().publishing.setChapters(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+      input.chapters,
     );
     return NextResponse.json({ ok: true, version: input.version + 1 });
   },

@@ -1,4 +1,5 @@
 import type { Publication } from "@/domain/models";
+import { chapterRanges } from "@/domain/chapters";
 
 // Explicit allowlist: storage keys, review notes and internal fields never enter public DTOs.
 export function comicCard(publication: Publication) {
@@ -14,6 +15,7 @@ export function comicCard(publication: Publication) {
     kind: publication.kind,
     ageRating: publication.ageRating,
     pageCount: publication.pageCount,
+    chapterCount: chapterRanges(publication).length,
     tags: publication.tags ?? [],
     pricePaise: publication.pricePaise ?? null,
     hasCover: !!publication.coverKey,

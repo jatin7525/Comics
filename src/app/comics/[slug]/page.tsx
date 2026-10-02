@@ -7,6 +7,8 @@ import { comicCard } from "@/server/dto";
 import { serviceOrigins } from "@/server/service";
 import type { Metadata } from "next";
 import { accessLabels, BillingNotice, ComicGrid } from "@/components/ui";
+import { chapterRanges } from "@/domain/chapters";
+import { PREVIEW_PAGES } from "@/domain/access";
 import {
   FollowButton,
   ReportForm,
@@ -50,6 +52,7 @@ export default async function ComicDetails({
   const publication = await services.publications.findBySlug(slug);
   if (!publication || publication.status !== "published") notFound();
   const related = await services.publications.related(publication);
+  const chapters = chapterRanges(publication);
   const user = await currentUser();
   const [saved, following] = user
     ? await Promise.all([
@@ -120,7 +123,7 @@ export default async function ComicDetails({
           <p className="synopsis">{publication.synopsis}</p>
           <p className="muted">
             {publication.kind === "comic"
-              ? `${publication.pageCount} pages · ${accessLabels[publication.access]}`
+              ? `${chapters.length ? `${chapters.length} ${chapters.length === 1 ? "chapter" : "chapters"} · ` : ""}${publication.pageCount} pages · ${accessLabels[publication.access]}`
               : "Publicly viewable original artwork"}
           </p>
           {publication.ageRating === "mature" && (
@@ -152,6 +155,37 @@ export default async function ComicDetails({
           <ReportForm comicId={publication.id} authenticated={!!user} />
         </div>
       </section>
+      {!!chapters.length && (
+        <section className="section">
+          <h2>Chapters</h2>
+          <p className="muted">
+            The first {PREVIEW_PAGES} pages of the comic are a free preview,
+            whichever chapter they belong to.
+          </p>
+          <ol className="chapter-list">
+            {chapters.map((chapter) => (
+              <li key={chapter.id}>
+                <Link href={`/read/${publication.slug}/${chapter.startPage}`}>
+                  <span className="chapter-number">
+                    Chapter {chapter.number}
+                  </span>
+                  <strong>{chapter.title}</strong>
+                  <span className="muted">
+                    {chapter.startPage === chapter.endPage
+                      ? `Page ${chapter.startPage}`
+                      : `Pages ${chapter.startPage}–${chapter.endPage}`}
+                    {chapter.endPage <= PREVIEW_PAGES
+                      ? " · Free preview"
+                      : chapter.startPage <= PREVIEW_PAGES
+                        ? " · Includes free preview"
+                        : ""}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       {publication.access !== "free" && <BillingNotice />}
       {!!related.length && (
         <section className="section">

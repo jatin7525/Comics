@@ -1,9 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readingAccess, canManagePublication } from "../../src/domain/access";
+import {
+  chapterForPage,
+  chapterRanges,
+  validChapters,
+} from "../../src/domain/chapters";
 import type { Entitlement, Publication, User } from "../../src/domain/models";
 import {
   catalogSchema,
+  chaptersSchema,
   publicationSchema,
   registerSchema,
   reviewSchema,
@@ -263,4 +269,97 @@ it("stores normalized tags and accepts only integer minor-unit prices", () => {
       publicationSchema.safeParse({ ...input, pricePaise }).success,
       false,
     );
+});
+describe("comic chapters", () => {
+  const chapters = [
+    { id: "one", title: "Arrival", startPage: 1 },
+    { id: "two", title: "The long night", startPage: 3 },
+    { id: "three", title: "Dawn", startPage: 8 },
+  ];
+  it("derives contiguous page ranges from chapter starts", () => {
+    const ranges = chapterRanges({ ...comic, chapters });
+    assert.deepEqual(
+      ranges.map(({ number, startPage, endPage }) => [
+        number,
+        startPage,
+        endPage,
+      ]),
+      [
+        [1, 1, 2],
+        [2, 3, 7],
+        [3, 8, 10],
+      ],
+    );
+    assert.equal(chapterForPage(ranges, 7)?.title, "The long night");
+    assert.equal(chapterForPage(ranges, 11), undefined);
+  });
+  it("treats comics without chapters as one continuous story", () => {
+    assert.deepEqual(chapterRanges(comic), []);
+    assert.deepEqual(
+      chapterRanges({ ...comic, kind: "artwork", chapters }),
+      [],
+    );
+  });
+  it("rejects gaps, overlaps, empty chapters and duplicate IDs", () => {
+    assert.equal(validChapters([], 0), true);
+    assert.equal(validChapters(chapters, 10), true);
+    assert.equal(validChapters([{ id: "a", startPage: 2 }], 10), false);
+    assert.equal(validChapters(chapters, 7), false);
+    assert.equal(
+      validChapters(
+        [
+          { id: "a", startPage: 1 },
+          { id: "b", startPage: 1 },
+        ],
+        10,
+      ),
+      false,
+    );
+    assert.equal(
+      validChapters(
+        [
+          { id: "a", startPage: 1 },
+          { id: "a", startPage: 4 },
+        ],
+        10,
+      ),
+      false,
+    );
+    assert.deepEqual(chapterRanges({ ...comic, pageCount: 5, chapters }), []);
+  });
+  it("keeps the guest preview per comic, not per chapter", () => {
+    const chaptered = { ...comic, chapters };
+    assert.equal(readingAccess(chaptered, 3, null, [], now).allowed, true);
+    assert.equal(
+      readingAccess(chaptered, 8, null, [], now).reason,
+      "login_required",
+    );
+    assert.equal(
+      readingAccess(chaptered, 8, user, [], now).reason,
+      "payment_required",
+    );
+  });
+  it("validates chapter input strictly", () => {
+    assert.equal(
+      chaptersSchema.safeParse({
+        version: 1,
+        chapters: [{ title: "  ", startPage: 1 }],
+      }).success,
+      false,
+    );
+    assert.equal(
+      chaptersSchema.safeParse({
+        version: 1,
+        chapters: [{ title: "Arrival", startPage: 1, endPage: 4 }],
+      }).success,
+      false,
+    );
+    assert.equal(
+      chaptersSchema.safeParse({
+        version: 1,
+        chapters: [{ title: "Arrival", startPage: 1 }],
+      }).success,
+      true,
+    );
+  });
 });

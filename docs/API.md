@@ -19,6 +19,7 @@ Mutation requests require the exact configured `Origin` and JSON content type, e
 | POST /api/publications | Publication input; author/admin |
 | PATCH /api/publications/:id | `{ version, publication }`; owner/admin, editable state |
 | POST /api/publications/:id/upload | Multipart `kind` (cover/page), `version`, `alt`, `file` |
+| PUT /api/publications/:id/chapters | `{ version, chapters: [{ id?, title, startPage }] }`; owner/admin, editable comic |
 | POST /api/publications/:id/submit | `{ version }`; complete assets + rights |
 | GET /api/studio/:id/media/:page | Owner/admin preview, including unpublished pages |
 | POST /api/admin/reviews/:id | `{ version, decision, note }`; separate reviewer |

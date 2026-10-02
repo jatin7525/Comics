@@ -10,11 +10,24 @@ Tags are normalized and deduplicated, with up to 20 tags of 40 characters. Publi
 
 Individual-purchase and membership-or-purchase comics accept custom INR prices stored as integer paise. A positive price is required on submission for those access modes. Admin review and the public details page show the saved price. Checkout, charging, revenue sharing and payouts remain unimplemented.
 
+## Chapters
+
+A comic can be split into named chapters. Chapters are boundaries in the comic's single ordered page sequence: each has a title and a start page and runs until the next chapter begins. The first chapter starts on page 1, later chapters start on strictly later saved pages, and no chapter may be empty. Comics without chapters read as one continuous story, so existing publications need no migration.
+
+In Studio's Pages step, authors can tick "Start a new chapter with these pages" before uploading a batch, or use the chapter editor to split, rename, move chapter starts and remove chapters (removed chapters' pages join the previous chapter). Chapters are edited only in draft and changes-requested states, use the same optimistic version as pages, and are checked again on submission. Reordering pages keeps chapter starts at the same page numbers. Admin review shows the chapter structure and groups pages by chapter.
+
+Readers see chapter counts on cards, a chapter list on the details page, the current chapter above each page, a chapter jump list, and a "Next: Chapter N" button at chapter ends. Page URLs, progress, and media authorization are unchanged. The four-page guest preview applies to the whole comic, not to each chapter, so chapter navigation never unlocks extra free pages.
+
+To give existing comics a single "Chapter 1" covering all their pages, run `npm run db:chapters` (dry run) and then `npm run db:chapters -- --apply`. For another environment, point it at that environment's file: `npx tsx --env-file=.env.production scripts/chapters-backfill.ts --apply`. Comics that already have chapters, comics without pages, and artwork are skipped, so re-running is safe.
+
+Chapters are reviewed with the whole publication. Adding a new chapter to an already-published comic needs the post-publication revision workflow, which is still future work.
+
 ## API additions
 
 - `GET /api/publications/:id`: owner/admin editor data, including safe page fields.
 - `POST /api/publications/:id/pages/order`: current version and an exact permutation of page IDs.
 - `PATCH /api/publications/:id/pages/:pageId`: current version, image description and story text.
+- `PUT /api/publications/:id/chapters`: current version and the complete ordered chapter list (`id` optional for new chapters, `title`, `startPage`). An empty list removes chapters.
 - Upload responses include the next version for batched uploads.
 - Publication details accept `tags` and nullable `pricePaise`.
 

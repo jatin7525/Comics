@@ -28,6 +28,7 @@ export interface EditorData {
   tags?: string[];
   pricePaise?: number | null;
   pages?: { id: string; number: number; alt: string; storyText?: string }[];
+  chapters?: { id: string; title: string; startPage: number }[];
 }
 export function PublicationEditor({
   publication,
@@ -347,7 +348,7 @@ export function PublicationEditor({
               <p>{draft.tags?.join(" · ")}</p>
               <p>
                 {kind === "comic"
-                  ? `${draft.pageCount} pages · ${draft.access}`
+                  ? `${draft.chapters?.length ? `${draft.chapters.length} ${draft.chapters.length === 1 ? "chapter" : "chapters"} · ` : ""}${draft.pageCount} pages · ${draft.access}`
                   : "Public artwork"}
                 {draft.pricePaise
                   ? ` · ₹${(draft.pricePaise / 100).toFixed(2)}`

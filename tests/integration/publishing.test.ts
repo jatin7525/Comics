@@ -22,6 +22,7 @@ import { AuthService, sessionHash } from "../../src/application/auth-service";
 import { PublicationService } from "../../src/application/publication-service";
 import { ReadingService } from "../../src/application/reading-service";
 import { AdminService } from "../../src/application/admin-service";
+import { chapterRanges } from "../../src/domain/chapters";
 import type { Publication, User } from "../../src/domain/models";
 import type { PublicationInput } from "../../src/domain/validation";
 
@@ -204,6 +205,66 @@ describe("persistent publishing workflow", { concurrency: false }, () => {
       pricePaise: null,
     });
   });
+  it("splits a draft comic into validated chapters", async () => {
+    let current = (await publications.find(created.id))!;
+    const chapters = [
+      { title: "Arrival", startPage: 1 },
+      { title: "Departure", startPage: 4 },
+    ];
+    await assert.rejects(
+      publishing.setChapters(other, created.id, current.version, chapters),
+      /not found/,
+    );
+    for (const invalid of [
+      [{ title: "Late start", startPage: 2 }],
+      [...chapters, { title: "Beyond the pages", startPage: 6 }],
+      [chapters[0]!, { ...chapters[1]!, startPage: 1 }],
+    ])
+      await assert.rejects(
+        publishing.setChapters(author, created.id, current.version, invalid),
+        /first chapter must start on page 1/,
+      );
+    const results = await Promise.allSettled([
+      publishing.setChapters(author, created.id, current.version, chapters),
+      publishing.setChapters(author, created.id, current.version, chapters),
+    ]);
+    assert.equal(
+      results.filter((result) => result.status === "fulfilled").length,
+      1,
+    );
+    current = (await publications.find(created.id))!;
+    const ranges = chapterRanges(current);
+    assert.deepEqual(
+      ranges.map(({ title, startPage, endPage }) => [
+        title,
+        startPage,
+        endPage,
+      ]),
+      [
+        ["Arrival", 1, 3],
+        ["Departure", 4, 5],
+      ],
+    );
+    // Saving the same IDs keeps chapter identity; details edits leave chapters alone.
+    await publishing.setChapters(author, created.id, current.version, [
+      ranges[0]!,
+      { id: ranges[1]!.id, title: "The departure", startPage: 4 },
+    ]);
+    current = (await publications.find(created.id))!;
+    await publishing.edit(author, created.id, current.version, {
+      ...input,
+      tags: ["moonquest", "space"],
+      pricePaise: null,
+    });
+    current = (await publications.find(created.id))!;
+    assert.deepEqual(
+      current.chapters?.map(({ id, title }) => [id, title]),
+      [
+        [ranges[0]!.id, "Arrival"],
+        [ranges[1]!.id, "The departure"],
+      ],
+    );
+  });
   it("prevents stale edits and locks submitted publications", async () => {
     await assert.rejects(
       publishing.edit(author, created.id, 1, input),
@@ -222,6 +283,10 @@ describe("persistent publishing workflow", { concurrency: false }, () => {
         "Another page.",
       ),
       /review/,
+    );
+    await assert.rejects(
+      publishing.setChapters(author, created.id, current.version, []),
+      /awaiting review/,
     );
     assert.equal(
       (await publications.catalog({ kind: "comic", limit: 12 })).items.length,

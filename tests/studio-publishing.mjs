@@ -48,15 +48,13 @@ try {
   await page
     .getByLabel("Cover / thumbnail", { exact: true })
     .setInputFiles({ name: "cover.png", mimeType: "image/png", buffer });
-  await page
-    .getByLabel("Select comic pages")
-    .setInputFiles(
-      Array.from({ length: 5 }, (_, i) => ({
-        name: `page-${i + 1}.png`,
-        mimeType: "image/png",
-        buffer,
-      })),
-    );
+  await page.getByLabel("Select comic pages").setInputFiles(
+    Array.from({ length: 5 }, (_, i) => ({
+      name: `page-${i + 1}.png`,
+      mimeType: "image/png",
+      buffer,
+    })),
+  );
   await page
     .getByRole("button", { name: "Move selected page 2 earlier", exact: true })
     .click();
@@ -96,6 +94,36 @@ try {
   await expect(
     page.getByRole("button", { name: "Save page text", exact: true }),
   ).toBeEnabled();
+  await page.getByLabel("Select comic pages").setInputFiles(
+    [6, 7].map((n) => ({
+      name: `page-${n}.png`,
+      mimeType: "image/png",
+      buffer,
+    })),
+  );
+  await page.getByLabel("Start a new chapter with these pages").check();
+  await page
+    .getByLabel("New chapter title", { exact: true })
+    .fill("Homecoming");
+  await page
+    .getByRole("button", { name: "Upload selected images (2)", exact: true })
+    .click();
+  await page
+    .getByRole("heading", { name: "Saved pages · 7", exact: true })
+    .waitFor();
+  await expect(page.getByLabel("Chapter 2 title", { exact: true })).toHaveValue(
+    "Homecoming",
+  );
+  await expect(page.getByText("Pages 1–5", { exact: true })).toBeVisible();
+  await page.getByLabel("Chapter 1 title", { exact: true }).fill("Liftoff");
+  await page.getByRole("button", { name: "Add chapter", exact: true }).click();
+  await page.getByLabel("Chapter 3 title", { exact: true }).fill("Epilogue");
+  await page
+    .getByRole("button", { name: "Save chapters", exact: true })
+    .click();
+  await expect(
+    page.getByText("Chapter 3 starts", { exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: "test-results/studio-publishing-pages.png",
     fullPage: true,
@@ -136,6 +164,14 @@ try {
   const db = client.db(process.env.MONGODB_DATABASE);
   const publication = await db.collection("publications").findOne({ _id: id });
   assert.equal(publication.pricePaise, 14950);
+  assert.deepEqual(
+    publication.chapters.map(({ title, startPage }) => [title, startPage]),
+    [
+      ["Liftoff", 1],
+      ["Homecoming", 6],
+      ["Epilogue", 7],
+    ],
+  );
   const adminLogin = await admin.request.post("/api/auth/login", {
     headers: { Origin: "http://localhost:3102" },
     data: { email: "admin@astra.test", password: process.env.SEED_PASSWORD },
@@ -158,6 +194,18 @@ try {
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    reader.getByText("Chapter 1 · Liftoff", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    reader
+      .getByRole("navigation", { name: "Chapters" })
+      .getByRole("link", { name: "2. Homecoming" }),
+  ).toHaveAttribute("href", `/read/${publication.slug}/6`);
+  await reader.screenshot({
+    path: "test-results/reader-chapters.png",
+    fullPage: true,
+  });
   await reader.goto(`http://localhost:3100/read/${publication.slug}/5`);
   assert.equal(
     (await reader.content()).includes("Protectedendingorbit"),
@@ -167,6 +215,14 @@ try {
   await expect(
     reader.getByText(/Individual purchase price: ₹149.50/),
   ).toBeVisible();
+  await expect(reader.getByText(/3 chapters · 7 pages/)).toBeVisible();
+  await expect(
+    reader.getByRole("link", { name: /Chapter 2.*Homecoming.*Page 6$/ }),
+  ).toHaveAttribute("href", `/read/${publication.slug}/6`);
+  await reader.screenshot({
+    path: "test-results/reader-chapter-list.png",
+    fullPage: true,
+  });
   for (const [term, count] of [
     ["lunarjourney", 1],
     ["Publicprevieworbit", 1],
@@ -193,7 +249,7 @@ try {
   ids.push(page.url().split("/").at(-1));
   await expect(page.getByLabel("Select comic pages")).toHaveCount(0);
   console.log(
-    "Studio flow passed: separate types, batch upload, reorder, page text, INR price, review, public search and protected text.",
+    "Studio flow passed: separate types, batch upload, reorder, page text, chapters, INR price, review, public search and protected text.",
   );
 } finally {
   const db = client.db(process.env.MONGODB_DATABASE);

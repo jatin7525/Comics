@@ -5,6 +5,7 @@ import { getServices } from "@/server/services";
 import { currentUser } from "@/server/session";
 import { ProgressRecorder, ReportForm } from "@/components/reader-actions";
 import { accessLabels } from "@/components/ui";
+import { chapterForPage, chapterRanges } from "@/domain/chapters";
 
 export async function generateMetadata({
   params,
@@ -26,8 +27,9 @@ export async function generateMetadata({
     number <= 4
       ? await getServices().publications.page(publication.id, number)
       : null;
+  const chapter = chapterForPage(chapterRanges(publication), number);
   return {
-    title: `${publication.title} · Page ${number}`,
+    title: `${publication.title} · ${chapter ? `Chapter ${chapter.number} · ` : ""}Page ${number}`,
     description: (preview?.storyText || publication.synopsis).slice(0, 160),
     robots: { index: number <= 4, follow: true },
   };
@@ -60,6 +62,9 @@ export default async function Read({
     ? await services.publications.page(publication.id, number)
     : null;
   if (decision.allowed && !page) notFound();
+  const chapters = chapterRanges(publication);
+  const chapter = chapterForPage(chapters, number);
+  const nextChapter = chapter && chapters[chapter.number];
   return (
     <section className="reading-room">
       <div className="reading-top">
@@ -73,6 +78,16 @@ export default async function Read({
       </div>
       <div className="reading-layout">
         <div>
+          {chapter && (
+            <p className="reading-chapter">
+              Chapter {chapter.number} · {chapter.title}
+              <span className="muted">
+                {" "}
+                · Page {number - chapter.startPage + 1} of{" "}
+                {chapter.endPage - chapter.startPage + 1}
+              </span>
+            </p>
+          )}
           {decision.allowed && page ? (
             <>
               <img
@@ -148,7 +163,11 @@ export default async function Read({
                 className="primary"
                 href={`/read/${publication.slug}/${number + 1}`}
               >
-                {number === 4 ? "Continue reading" : "Next page"}
+                {nextChapter && number === chapter.endPage
+                  ? `Next: Chapter ${nextChapter.number}`
+                  : number === 4
+                    ? "Continue reading"
+                    : "Next page"}
               </Link>
             ) : number === publication.pageCount && decision.allowed ? (
               <Link className="primary" href="/comics">
@@ -164,6 +183,25 @@ export default async function Read({
           <p>{publication.synopsis}</p>
           <p>{accessLabels[publication.access]}</p>
           <p>By {publication.authorName}</p>
+          {!!chapters.length && (
+            <nav aria-label="Chapters" className="reading-chapters">
+              <h3>Chapters</h3>
+              <ol>
+                {chapters.map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      href={`/read/${publication.slug}/${item.startPage}`}
+                      aria-current={
+                        item.id === chapter?.id ? "location" : undefined
+                      }
+                    >
+                      {item.number}. {item.title}
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )}
           <ReportForm comicId={publication.id} authenticated={!!user} />
         </aside>
       </div>

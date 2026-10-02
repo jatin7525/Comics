@@ -16,6 +16,11 @@ export function editorData(publication: Publication, pages: ComicPage[]) {
     feedback: publication.feedback,
     tags: publication.tags ?? [],
     pricePaise: publication.pricePaise ?? null,
+    chapters: (publication.chapters ?? []).map(({ id, title, startPage }) => ({
+      id,
+      title,
+      startPage,
+    })),
     pages: pages.map(({ id, number, alt, storyText }) => ({
       id,
       number,

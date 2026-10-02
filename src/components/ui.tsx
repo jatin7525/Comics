@@ -155,7 +155,9 @@ export function ComicCard({ comic }: { comic: ComicCardData }) {
         <span>
           {comic.kind === "artwork"
             ? "Original artwork"
-            : `${comic.pageCount} pages`}
+            : comic.chapterCount > 1
+              ? `${comic.chapterCount} chapters · ${comic.pageCount} pages`
+              : `${comic.pageCount} pages`}
         </span>
         <span className="access-caption">{accessLabels[comic.access]}</span>
       </div>

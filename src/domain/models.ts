@@ -50,6 +50,7 @@ export interface Publication {
   tags?: string[];
   pricePaise?: number | null;
   previewText?: string;
+  chapters?: Chapter[];
   rightsConfirmed: boolean;
   status: PublicationStatus;
   coverKey: string | null;
@@ -59,6 +60,11 @@ export interface Publication {
   createdAt: Date;
   updatedAt: Date;
   publishedAt: Date | null;
+}
+export interface Chapter {
+  id: string;
+  title: string;
+  startPage: number;
 }
 export interface ComicPage {
   id: string;

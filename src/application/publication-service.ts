@@ -8,10 +8,12 @@ import type { Publication, User } from "@/domain/models";
 import {
   publicationSchema,
   pageTextSchema,
+  type ChapterInput,
   type PublicationInput,
 } from "@/domain/validation";
 import { ensure } from "@/domain/errors";
 import { canManagePublication } from "@/domain/access";
+import { validChapters } from "@/domain/chapters";
 
 const editable: Publication["status"][] = ["draft", "changes_requested"];
 export class PublicationService {
@@ -167,6 +169,42 @@ export class PublicationService {
       409,
     );
   }
+  async setChapters(
+    actor: User,
+    id: string,
+    version: number,
+    input: ChapterInput[],
+  ) {
+    const current = await this.owned(actor, id);
+    ensure(
+      current.kind === "comic",
+      "INVALID_KIND",
+      "Only comics have chapters.",
+    );
+    ensure(
+      editable.includes(current.status) && current.version === version,
+      "CONFLICT",
+      "This publication changed or is awaiting review. Reload before saving chapters.",
+      409,
+    );
+    const chapters = input.map(({ id, title, startPage }) => ({
+      id: id ?? randomUUID(),
+      title,
+      startPage,
+    }));
+    ensure(
+      validChapters(chapters, current.pageCount),
+      "INVALID_CHAPTERS",
+      "The first chapter must start on page 1, and each later chapter must start on a later saved page.",
+    );
+    // The version check also pins pageCount, so the boundaries were validated against the stored pages.
+    ensure(
+      await this.publications.update(id, version, editable, { chapters }),
+      "CONFLICT",
+      "This publication changed. Reload before saving chapters.",
+      409,
+    );
+  }
   async submit(actor: User, id: string, version: number) {
     const current = await this.owned(actor, id);
     ensure(
@@ -196,6 +234,11 @@ export class PublicationService {
       current.kind === "artwork" || current.pageCount >= 5,
       "PAGES_REQUIRED",
       "Upload at least five sequential pages before submitting a comic.",
+    );
+    ensure(
+      validChapters(current.chapters ?? [], current.pageCount),
+      "INVALID_CHAPTERS",
+      "Fix the chapter boundaries before submitting.",
     );
     ensure(
       await this.publications.update(id, version, editable, {

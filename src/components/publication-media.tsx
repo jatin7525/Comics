@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { requestJson } from "./mutation";
 import type { EditorData } from "./publication-editor";
+import { ChapterEditor, type ChapterDraft } from "./chapter-editor";
 
 export function LocalPreview({ file }: { file: File }) {
   const ref = useRef<HTMLImageElement>(null);
@@ -24,12 +25,18 @@ export function PublicationMedia({
   const [files, setFiles] = useState<{ id: string; file: File }[]>([]);
   const [cover, setCover] = useState<File | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // null keeps new pages in the current last chapter; a string starts a new chapter with them.
+  const [newChapter, setNewChapter] = useState<string | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [progress, setProgress] = useState("");
   const pages = publication.pages ?? [];
   const page = pages.find((page) => page.id === selected) ?? pages[0];
   const editable = ["draft", "changes_requested"].includes(publication.status);
+  const chapters = publication.chapters ?? [];
+  const chapterStarts = new Map(
+    chapters.map((chapter, index) => [chapter.startPage, index + 1]),
+  );
   async function run(work: () => Promise<void>) {
     setBusy(true);
     onBusy(true);
@@ -42,6 +49,13 @@ export function PublicationMedia({
       setBusy(false);
       onBusy(false);
     }
+  }
+  async function saveChapters(version: number, next: ChapterDraft[]) {
+    await requestJson(
+      `/api/publications/${publication.id}/chapters`,
+      { version, chapters: next },
+      "PUT",
+    );
   }
   async function reload() {
     const response = await fetch(`/api/publications/${publication.id}`);
@@ -78,11 +92,14 @@ export function PublicationMedia({
   async function upload() {
     await run(async () => {
       let version = publication.version;
+      const firstNewPage = pages.length + 1;
       const queue = [
         ...(cover ? [{ id: "cover", file: cover, kind: "cover" }] : []),
         ...files.map((item) => ({ ...item, kind: "page" })),
       ];
-      let completed = 0;
+      let completed = 0,
+        uploadedPages = 0,
+        failure: unknown = null;
       try {
         for (const item of queue) {
           setProgress(`Uploading ${completed + 1} of ${queue.length}`);
@@ -109,15 +126,38 @@ export function PublicationMedia({
           version = data.version;
           completed++;
           if (item.kind === "cover") setCover(null);
-          else
+          else {
+            uploadedPages++;
             setFiles((current) =>
               current.filter((file) => file.id !== item.id),
             );
+          }
         }
-      } finally {
-        setProgress("");
-        await reload();
+      } catch (error) {
+        failure = error;
       }
+      setProgress("");
+      // Mark the boundary once any page landed; retried pages then continue the new last chapter.
+      if (newChapter !== null && uploadedPages) {
+        try {
+          await saveChapters(version, [
+            ...(chapters.length
+              ? chapters
+              : firstNewPage > 1
+                ? [{ title: "Chapter 1", startPage: 1 }]
+                : []),
+            {
+              title: newChapter.trim() || `Chapter ${chapters.length + 1}`,
+              startPage: firstNewPage,
+            },
+          ]);
+          setNewChapter(null);
+        } catch (error) {
+          failure ??= error;
+        }
+      }
+      await reload();
+      if (failure) throw failure;
     });
   }
   return (
@@ -172,6 +212,32 @@ export function PublicationMedia({
           {!!files.length && (
             <>
               <h3>Ready to upload · {files.length} pages</h3>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={newChapter !== null}
+                  disabled={busy}
+                  onChange={(e) =>
+                    setNewChapter(
+                      e.target.checked
+                        ? `Chapter ${(chapters.length || (pages.length ? 1 : 0)) + 1}`
+                        : null,
+                    )
+                  }
+                />
+                Start a new chapter with these pages
+              </label>
+              {newChapter !== null && (
+                <label className="field">
+                  New chapter title
+                  <input
+                    value={newChapter}
+                    maxLength={100}
+                    disabled={busy}
+                    onChange={(e) => setNewChapter(e.target.value)}
+                  />
+                </label>
+              )}
               <div className="comic-filmstrip" aria-label="Selected pages">
                 {files.map((item, index) => (
                   <figure key={item.id}>
@@ -263,6 +329,11 @@ export function PublicationMedia({
                   />
                 </button>
                 <figcaption>
+                  {chapterStarts.has(item.number) && (
+                    <strong className="chapter-start">
+                      Chapter {chapterStarts.get(item.number)} starts
+                    </strong>
+                  )}
                   Page {item.number}
                   {item.number <= 4 ? " · Free preview" : ""}
                 </figcaption>
@@ -302,6 +373,20 @@ export function PublicationMedia({
             ))}
           </div>
         </>
+      )}
+      {publication.kind === "comic" && (
+        <ChapterEditor
+          key={publication.version}
+          publication={publication}
+          busy={busy}
+          editable={editable}
+          onSave={(next) =>
+            run(async () => {
+              await saveChapters(publication.version, next);
+              await reload();
+            })
+          }
+        />
       )}
       {page && (
         <div
