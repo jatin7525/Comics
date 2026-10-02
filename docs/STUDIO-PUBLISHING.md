@@ -18,7 +18,7 @@ In Studio's Pages step, authors can tick "Start a new chapter with these pages" 
 
 Readers see chapter counts on cards, a chapter list on the details page, the current chapter above each page, a chapter jump list, and a "Next: Chapter N" button at chapter ends. Page URLs, progress, and media authorization are unchanged. The four-page guest preview applies to the whole comic, not to each chapter, so chapter navigation never unlocks extra free pages.
 
-To give existing comics a single "Chapter 1" covering all their pages, run `npm run db:chapters` (dry run) and then `npm run db:chapters -- --apply`. For another environment, point it at that environment's file: `npx tsx --env-file=.env.production scripts/chapters-backfill.ts --apply`. Comics that already have chapters, comics without pages, and artwork are skipped, so re-running is safe.
+To give existing comics a single "Chapter 1" covering all their pages, run `npm run db:chapters` (dry run) and then `npm run db:chapters -- --apply`. For another environment, point it at that environment's file: `npx tsx --env-file=.env.production scripts/chapters-backfill.ts --apply`. Comics that already have chapters, comics without pages, and artwork are skipped, so re-running is safe. Without local database access, run the **Backfill comic chapters** GitHub Actions workflow instead: add a `MONGODB_URI` repository secret, run it once as a dry run, then again with **apply** checked. Atlas network access must allow GitHub-hosted runners.
 
 Chapters are reviewed with the whole publication. Adding a new chapter to an already-published comic needs the post-publication revision workflow, which is still future work.
 
