@@ -2030,6 +2030,7 @@ button:disabled {
 .detail-tags {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .detail-byline {
   font-size: 13px;
