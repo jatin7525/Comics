@@ -9,7 +9,6 @@ import type { AccessModel } from "@/domain/models";
 export interface ReaderPage {
   number: number;
   alt: string;
-  storyText: string;
 }
 type Gate = "login_required" | "payment_required" | null;
 export interface PageBatch {
@@ -238,12 +237,6 @@ export function ReaderScroller({
               decoding="async"
               fetchPriority={index === 0 ? "high" : undefined}
             />
-            {page.storyText && (
-              <section className="panel page-transcript">
-                <h3>Page {page.number} story text</h3>
-                <p style={{ whiteSpace: "pre-wrap" }}>{page.storyText}</p>
-              </section>
-            )}
           </section>
         );
       })}

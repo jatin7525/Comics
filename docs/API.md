@@ -11,7 +11,7 @@ Mutation requests require the exact configured `Origin` and JSON content type, e
 | POST /api/auth/logout | Revoke current session |
 | GET /api/catalog | `genre`, `access`, `search`, `cursor`, `limit` (1–24), `kind` |
 | GET /api/comics/:id/cover | Public published cover or authorized workspace access |
-| GET /api/comics/:id/pages | `from`, `limit` (1–10); readable pages from `from` with alt/story text, stopping at the first locked page (`gate`, `gatePage`, `nextFrom`) |
+| GET /api/comics/:id/pages | `from`, `limit` (1–10); readable page numbers and image descriptions from `from`, stopping at the first locked page (`gate`, `gatePage`, `nextFrom`) |
 | GET /api/comics/:id/media/:page | Guest preview or server-verified reader entitlement; browser-cacheable for 7 days (`private`) |
 | POST /api/comics/:id/save | `{ enabled }`; authenticated |
 | POST /api/comics/:id/progress | `{ page }`; must have reading access |

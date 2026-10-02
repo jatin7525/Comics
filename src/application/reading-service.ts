@@ -33,7 +33,7 @@ export class ReadingService {
     };
   }
   // Returns consecutive readable pages from `from`, stopping at the first page the reader may not
-  // open. Locked pages are never returned, so their story text stays on the server.
+  // open. Only the page number and image description are returned; story text is not shown to readers.
   async pages(id: string, from: number, limit: number, user: User | null) {
     const publication = await this.publications.find(id);
     ensure(
@@ -70,11 +70,7 @@ export class ReadingService {
       last >= from ? await this.publications.pageRange(id, from, last) : [];
     return {
       publication,
-      pages: pages.map(({ number, alt, storyText }) => ({
-        number,
-        alt,
-        storyText: storyText ?? "",
-      })),
+      pages: pages.map(({ number, alt }) => ({ number, alt })),
       gate,
       gatePage: gate ? last + 1 : null,
       nextFrom: !gate && last < publication.pageCount ? last + 1 : null,

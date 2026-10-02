@@ -189,11 +189,8 @@ try {
   const guest = await browser.newContext();
   const reader = await guest.newPage();
   await reader.goto(`http://localhost:3100/read/${publication.slug}/1`);
-  await expect(
-    reader.getByText("Publicprevieworbit A young explorer returns home.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(reader.locator("img.reading-page").first()).toBeVisible();
+  await expect(reader.getByText(/Publicprevieworbit/)).toHaveCount(0);
   await expect(
     reader.getByRole("heading", { name: "Chapter 1 · Liftoff" }),
   ).toBeVisible();

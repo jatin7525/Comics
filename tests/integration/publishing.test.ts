@@ -408,7 +408,7 @@ describe("persistent publishing workflow", { concurrency: false }, () => {
     assert.equal(reader.gate, "payment_required");
     assert.ok(
       !JSON.stringify(reader.pages).includes("Privatesecret"),
-      "locked story text must not be returned",
+      "story text must not be returned to readers",
     );
     const firstBatch = await reading.pages(created.id, 1, 2, null);
     assert.deepEqual(
