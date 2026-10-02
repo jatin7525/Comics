@@ -1,4 +1,5 @@
 import "server-only";
+import { serviceId } from "./service";
 import { randomUUID, createHmac } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
@@ -64,7 +65,7 @@ export function api(
           ? "media"
           : "api";
       await services.limiter.consume(
-        `${scope}:${options.limit ?? 120}:${options.window ?? 60}:${identity}`,
+        `${serviceId()}:${scope}:${options.limit ?? 120}:${options.window ?? 60}:${identity}`,
         options.limit ?? 120,
         options.window ?? 60,
       );

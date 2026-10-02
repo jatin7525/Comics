@@ -1,4 +1,5 @@
 "use client";
+import type { ServiceId } from "@/domain/service";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,8 +8,10 @@ import { requestJson } from "./mutation";
 export function AuthForm({
   mode,
   next = "/",
+  workspace = "reader",
 }: {
   mode: "login" | "register";
+  workspace?: ServiceId;
   next?: string;
 }) {
   const router = useRouter();
@@ -39,7 +42,13 @@ export function AuthForm({
   }
   return (
     <div className="auth-card">
-      <span className="tag">Your reading space</span>
+      <span className="tag">
+        {workspace === "reader"
+          ? "Your reading space"
+          : workspace === "studio"
+            ? "Author Studio"
+            : "Admin console"}
+      </span>
       <h1>
         {mode === "register"
           ? "Your next chapter starts here."
@@ -48,7 +57,9 @@ export function AuthForm({
       <p>
         {mode === "register"
           ? "Save stories, follow creators, and read every free comic."
-          : "Pick up where your imagination left off."}
+          : workspace === "reader"
+            ? "Pick up where your imagination left off."
+            : "Sign in with your authorized workspace account."}
       </p>
       <form onSubmit={submit}>
         {mode === "register" && (
@@ -103,18 +114,20 @@ export function AuthForm({
               : "Sign in"}
         </button>
       </form>
-      <Link
-        className="text-link"
-        href={
-          mode === "register"
-            ? `/login?next=${encodeURIComponent(next)}`
-            : `/register?next=${encodeURIComponent(next)}`
-        }
-      >
-        {mode === "register"
-          ? "Already have an account? Sign in"
-          : "New here? Create an account"}
-      </Link>
+      {workspace === "reader" && (
+        <Link
+          className="text-link"
+          href={
+            mode === "register"
+              ? `/login?next=${encodeURIComponent(next)}`
+              : `/register?next=${encodeURIComponent(next)}`
+          }
+        >
+          {mode === "register"
+            ? "Already have an account? Sign in"
+            : "New here? Create an account"}
+        </Link>
+      )}
     </div>
   );
 }

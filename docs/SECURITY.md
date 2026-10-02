@@ -17,8 +17,12 @@ Every private page request rechecks publication/access state. Browser restrictio
 
 Implement verified email, password reset/recovery, administrator MFA, account/session management, tested privacy/deletion/export processes, and real operational monitoring. Add a nonce-based Content Security Policy compatible with Next.js and the theme bootstrap. Review content policy, age-rating behavior, licensing, appeals, retention, and moderation staffing. Age ratings currently inform readers; they are not age verification.
 
-Image processing validates formats and strips metadata. Production upload scanning and queued processing remain work. Publication editing currently supports metadata, cover replacement, and page appends in editable states; arbitrary page replacement/reordering and post-publication revision workflows are future work. Admin status/role changes protect existing administrators; administrator provisioning is an operator responsibility.
+Image processing validates formats and strips metadata. Production upload scanning and queued processing remain work. Publication editing supports metadata, cover replacement, page appends, ordered page rearrangement and page text in editable states. Post-publication revision workflows and saved-page replacement remain future work. Admin status/role changes protect existing administrators; administrator provisioning is an operator responsibility.
 
 Payment webhooks, verified entitlements, refunds, subscriptions, creator payouts, ad-network integration and consent are deliberately absent. No browser or public API can manufacture a purchase. Seeded membership is a local testing fixture only.
 
 This is not a penetration-test certification. Unit, integration and browser tests cover the access paths described in VERIFICATION.md; independent security review and production staging are still required.
+
+## Separate workspaces
+
+Reader, Studio and Admin now have distinct route trees, builds, processes, cookie names and session audiences. Tokens from another audience are rejected even after renaming the cookie. See SERVICES.md for the tested boundaries and the remaining production gateway, least-privilege credentials and MFA requirements. Localhost cookies are host-scoped, not port-scoped; the per-service names prevent accidental collisions locally, while production must use separate HTTPS hostnames.

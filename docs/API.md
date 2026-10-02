@@ -1,5 +1,7 @@
 # HTTP API
 
+Endpoints are installed only in their owning service: reader community/catalog APIs on Reader, publication-write APIs on Studio, administrative APIs on Admin. Login/logout and authorized cover retrieval exist in each service; registration exists only on Reader. Review page retrieval exists in Studio and Admin. Sessions cannot cross these boundaries. See SERVICES.md.
+
 Mutation requests require the exact configured `Origin` and JSON content type, except image upload (multipart). Authentication uses the HttpOnly session cookie. IDs are UUIDs. Unknown fields are rejected on mutation schemas. Errors return `{ error: { code, message, requestId } }`; common statuses are 400 validation, 401 login required, 403 permission/access denied, 404 inaccessible object, 409 stale version/state, 413 oversized body, 429 throttled.
 
 | Method and path | Purpose |

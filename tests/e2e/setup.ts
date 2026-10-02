@@ -22,7 +22,9 @@ export default async function setup() {
     await client
       .db(process.env.MONGODB_DATABASE)
       .collection<{ _id: string }>("rateLimits")
-      .deleteMany({ _id: { $regex: `^auth:10:600:${identity}:` } });
+      .deleteMany({
+        _id: { $regex: `^(reader|studio|admin):auth:10:600:${identity}:` },
+      });
   } finally {
     await client.close();
   }

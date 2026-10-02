@@ -27,3 +27,6 @@ coverage/
 next-env.d.ts
 test-results/
 playwright-report/
+
+apps/*/.next/
+apps/*/next-env.d.ts

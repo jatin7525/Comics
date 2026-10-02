@@ -19,10 +19,6 @@ export default function About() {
           Artwork, publishing rights, age ratings, and reader concerns are part
           of that process.
         </p>
-        <div className="notice">
-          Local development edition: the seeded catalog contains illustrative
-          sample stories. Payments and external advertising are not connected.
-        </div>
       </article>
     </>
   );

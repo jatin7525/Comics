@@ -52,17 +52,21 @@ async function main() {
     const id = existing?._id ?? randomUUID();
     ids.set(person.key, id);
     if (!existing)
-      await db
-        .collection<AccountDoc>("accounts")
-        .insertOne({
-          _id: id,
-          name: person.name,
-          role: person.role,
-          email,
-          passwordHash: await hashPassword(password),
-          status: "active",
-          createdAt: new Date(),
-        });
+      await db.collection<AccountDoc>("accounts").insertOne({
+        _id: id,
+        name: person.name,
+        role: person.role,
+        email,
+        passwordHash: await hashPassword(password),
+        status: "active",
+        createdAt: new Date(),
+      });
+  }
+  if (process.argv.includes("--accounts-only")) {
+    console.log(
+      "Local test accounts ready; catalog and entitlements unchanged.",
+    );
+    return;
   }
   const titles: {
     title: string;
@@ -181,16 +185,14 @@ async function main() {
         .toBuffer();
       const key = `seed/${id}/pages/${page}.webp`;
       await storage.put(key, bytes, "image/webp");
-      await db
-        .collection<PageDoc>("pages")
-        .insertOne({
-          _id: randomUUID(),
-          comicId: id,
-          number: page,
-          storageKey: key,
-          alt: `Sample illustrated scene from ${entry.title}, page ${page}.`,
-          bytes: bytes.byteLength,
-        });
+      await db.collection<PageDoc>("pages").insertOne({
+        _id: randomUUID(),
+        comicId: id,
+        number: page,
+        storageKey: key,
+        alt: `Sample illustrated scene from ${entry.title}, page ${page}.`,
+        bytes: bytes.byteLength,
+      });
     }
     const date = new Date(Date.now() - index * 60_000);
     const publication: Publication = {
@@ -230,19 +232,17 @@ async function main() {
       .collection<PublicationDoc>("publications")
       .findOne({ slug: entry.slug });
     if (!source) continue;
-    await db
-      .collection<PublicationDoc>("publications")
-      .insertOne({
-        ...source,
-        _id: randomUUID(),
-        slug,
-        title: ["City of borrowed light", "The salt kingdoms", "Into the hush"][
-          index
-        ]!,
-        kind: "artwork",
-        access: "free",
-        pageCount: 0,
-      });
+    await db.collection<PublicationDoc>("publications").insertOne({
+      ...source,
+      _id: randomUUID(),
+      slug,
+      title: ["City of borrowed light", "The salt kingdoms", "Into the hush"][
+        index
+      ]!,
+      kind: "artwork",
+      access: "free",
+      pageCount: 0,
+    });
   }
   const memberId = ids.get("member")!;
   if (
@@ -250,16 +250,14 @@ async function main() {
       .collection<GrantDoc>("entitlements")
       .findOne({ userId: memberId, kind: "membership" }))
   )
-    await db
-      .collection<GrantDoc>("entitlements")
-      .insertOne({
-        _id: randomUUID(),
-        userId: memberId,
-        kind: "membership",
-        comicId: null,
-        expiresAt: new Date(Date.now() + 30 * 86400_000),
-        revokedAt: null,
-      });
+    await db.collection<GrantDoc>("entitlements").insertOne({
+      _id: randomUUID(),
+      userId: memberId,
+      kind: "membership",
+      comicId: null,
+      expiresAt: new Date(Date.now() + 30 * 86400_000),
+      revokedAt: null,
+    });
   console.log(
     "Seed complete. Local accounts: admin@astra.test, author@astra.test, author2@astra.test, reader@astra.test, member@astra.test. Password is SEED_PASSWORD in .env.local. No production billing or entitlement API was created.",
   );

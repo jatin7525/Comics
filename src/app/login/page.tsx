@@ -1,3 +1,4 @@
+import { serviceId } from "@/server/service";
 import { AuthForm } from "@/components/auth-form";
 export default async function Login({
   searchParams,
@@ -5,5 +6,11 @@ export default async function Login({
   searchParams: Promise<{ next?: string }>;
 }) {
   const params = await searchParams;
-  return <AuthForm mode="login" next={params.next} />;
+  return (
+    <AuthForm
+      mode="login"
+      workspace={serviceId()}
+      next={params.next ?? (serviceId() === "reader" ? "/" : `/${serviceId()}`)}
+    />
+  );
 }

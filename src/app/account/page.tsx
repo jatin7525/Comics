@@ -1,3 +1,4 @@
+import { serviceOrigins } from "@/server/service";
 import { requireUser } from "@/server/session";
 import { Intro } from "@/components/ui";
 export default async function Account() {
@@ -24,6 +25,14 @@ export default async function Account() {
           Author access is granted by the editorial team. Payment management
           will become available when billing launches.
         </p>
+        {user.role === "reader" && (
+          <a
+            className="primary"
+            href={`${serviceOrigins().reader}/become-author`}
+          >
+            Apply for author access
+          </a>
+        )}
       </div>
     </>
   );

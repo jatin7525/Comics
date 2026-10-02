@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import type { ServiceId } from "@/domain/service";
 import type { Role } from "@/domain/models";
 
 type LinkItem = [string, string, LucideIcon];
@@ -42,6 +43,7 @@ const readerLinks: LinkItem[] = [
   ["Reading history", "/history", History],
   ["Following", "/following", Bell],
   ["Membership", "/membership", Crown],
+  ["Become an author", "/become-author", BookOpen],
 ];
 const studioLinks: LinkItem[] = [
   ["Overview", "/studio", Compass],
@@ -55,6 +57,7 @@ const studioLinks: LinkItem[] = [
 const adminLinks: LinkItem[] = [
   ["Overview", "/admin", Compass],
   ["Review queue", "/admin/reviews", ShieldCheck],
+  ["Author applications", "/admin/applications", Users],
   ["Content library", "/admin/content", BookOpen],
   ["Authors & access", "/admin/users", Users],
   ["Reader reports", "/admin/reports", Flag],
@@ -66,8 +69,12 @@ const adminLinks: LinkItem[] = [
 export function AppShell({
   children,
   user,
+  service,
+  origins,
 }: {
   children: ReactNode;
+  service: ServiceId;
+  origins: Record<ServiceId, string>;
   user: { name: string; role: Role } | null;
 }) {
   const pathname = usePathname();
@@ -75,11 +82,7 @@ export function AppShell({
   const { resolvedTheme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
-  const workspace = pathname.startsWith("/admin")
-    ? "admin"
-    : pathname.startsWith("/studio")
-      ? "studio"
-      : "reader";
+  const workspace = service;
   const links =
     workspace === "admin"
       ? adminLinks
@@ -102,6 +105,13 @@ export function AppShell({
         error instanceof Error ? error.message : "Unable to sign out.",
       );
     }
+  }
+  if (pathname === "/login" || pathname === "/register") {
+    return (
+      <main className="auth-page" id="main-content">
+        {children}
+      </main>
+    );
   }
   return (
     <>
@@ -168,7 +178,7 @@ export function AppShell({
           <div className="workspace">
             <span className="nav-label">Your workspaces</span>
             <Link
-              href="/"
+              href={origins.reader}
               className="workspace-link"
               onClick={() => setOpen(false)}
             >
@@ -177,7 +187,7 @@ export function AppShell({
             </Link>
             {user && ["author", "admin"].includes(user.role) && (
               <Link
-                href="/studio"
+                href={`${origins.studio}/studio`}
                 className="workspace-link"
                 onClick={() => setOpen(false)}
               >
@@ -187,7 +197,7 @@ export function AppShell({
             )}
             {user?.role === "admin" && (
               <Link
-                href="/admin"
+                href={`${origins.admin}/admin`}
                 className="workspace-link"
                 onClick={() => setOpen(false)}
               >
@@ -228,7 +238,7 @@ export function AppShell({
               <Moon className="theme-moon" size={18} />
               <Sun className="theme-sun" size={18} />
             </button>
-            <form action="/comics" className="search">
+            <form action={`${origins.reader}/comics`} className="search">
               <Search size={17} />
               <input
                 name="search"

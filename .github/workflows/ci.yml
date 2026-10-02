@@ -31,7 +31,7 @@ jobs:
           cat /tmp/astra-r2.log
           exit 1
       - run: npm run test:integration
-      - run: npm run build
+      - run: npm run build:all
       - run: node scripts/build.mjs
       - if: always()
         run: npm run db:down

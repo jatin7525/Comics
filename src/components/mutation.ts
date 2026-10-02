@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 export async function requestJson<T>(
@@ -21,18 +21,19 @@ export async function requestJson<T>(
 }
 export function useMutation() {
   const router = useRouter();
+  const [refreshing, startTransition] = useTransition();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   async function run(task: () => Promise<void>, message = "Saved.") {
-    if (pending) return;
+    if (pending || refreshing) return;
     setPending(true);
     setError("");
     setSuccess("");
     try {
       await task();
       setSuccess(message);
-      router.refresh();
+      startTransition(() => router.refresh());
     } catch (error) {
       setError(
         error instanceof Error
@@ -43,5 +44,5 @@ export function useMutation() {
       setPending(false);
     }
   }
-  return { pending, error, success, run };
+  return { pending: pending || refreshing, error, success, run };
 }

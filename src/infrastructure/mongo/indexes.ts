@@ -2,7 +2,23 @@ import { database } from "./connection";
 
 export async function ensureIndexes() {
   const db = await database();
+  const publications = db.collection("publications");
+  const indexes = await publications
+    .listIndexes()
+    .toArray()
+    .catch((error: { code?: number }) => {
+      if (error.code === 26) return [];
+      throw error;
+    });
+  const legacy = indexes.find((index) => index.weights && !index.weights.tags);
+  if (legacy?.name) await publications.dropIndex(legacy.name);
   await Promise.all([
+    db
+      .collection("authorApplications")
+      .createIndex({ userId: 1 }, { unique: true }),
+    db
+      .collection("authorApplications")
+      .createIndex({ status: 1, updatedAt: 1 }),
     db.collection("accounts").createIndex({ email: 1 }, { unique: true }),
     db
       .collection("sessions")
@@ -21,7 +37,13 @@ export async function ensureIndexes() {
     db.collection("publications").createIndex({ authorId: 1, updatedAt: -1 }),
     db
       .collection("publications")
-      .createIndex({ title: "text", authorName: "text", synopsis: "text" }),
+      .createIndex({
+        title: "text",
+        authorName: "text",
+        synopsis: "text",
+        tags: "text",
+        previewText: "text",
+      }),
     db
       .collection("pages")
       .createIndex({ comicId: 1, number: 1 }, { unique: true }),

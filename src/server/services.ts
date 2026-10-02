@@ -1,4 +1,7 @@
 import "server-only";
+import { MongoAuthorApplications } from "@/infrastructure/mongo/author-applications";
+import { AuthorApplicationService } from "@/application/author-application-service";
+import { serviceId } from "./service";
 import {
   MongoAccounts,
   MongoEntitlements,
@@ -20,7 +23,10 @@ function compose() {
   const community = new MongoCommunity();
   const administration = new MongoAdministration();
   const storage = createStorage();
+  const applications = new MongoAuthorApplications();
   return {
+    applications,
+    authorApplications: new AuthorApplicationService(applications, storage),
     accounts,
     publications,
     entitlements,
@@ -28,7 +34,7 @@ function compose() {
     administration,
     storage,
     limiter: new MongoRateLimiter(),
-    auth: new AuthService(accounts),
+    auth: new AuthService(accounts, serviceId()),
     publishing: new PublicationService(publications, storage, administration),
     reading: new ReadingService(publications, entitlements, storage, community),
     admin: new AdminService(administration, publications),

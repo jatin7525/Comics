@@ -3,12 +3,42 @@ import { notFound } from "next/navigation";
 import { BookOpen, ArrowLeft } from "lucide-react";
 import { getServices } from "@/server/services";
 import { currentUser } from "@/server/session";
-import { accessLabels, BillingNotice } from "@/components/ui";
+import { comicCard } from "@/server/dto";
+import { serviceOrigins } from "@/server/service";
+import type { Metadata } from "next";
+import { accessLabels, BillingNotice, ComicGrid } from "@/components/ui";
 import {
   FollowButton,
   ReportForm,
   SaveButton,
 } from "@/components/reader-actions";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const publication = await getServices().publications.findBySlug(slug);
+  if (!publication || publication.status !== "published")
+    return {
+      title: "Story unavailable",
+      robots: { index: false, follow: false },
+    };
+  const url = `${serviceOrigins().reader}/comics/${publication.slug}`;
+  return {
+    title: publication.title,
+    description: publication.synopsis.slice(0, 160),
+    keywords: publication.tags ?? [],
+    alternates: { canonical: url },
+    openGraph: {
+      title: publication.title,
+      description: publication.synopsis.slice(0, 160),
+      url,
+      images: [`${serviceOrigins().reader}/api/comics/${publication.id}/cover`],
+    },
+  };
+}
 
 export default async function ComicDetails({
   params,
@@ -19,6 +49,7 @@ export default async function ComicDetails({
   const services = getServices();
   const publication = await services.publications.findBySlug(slug);
   if (!publication || publication.status !== "published") notFound();
+  const related = await services.publications.related(publication);
   const user = await currentUser();
   const [saved, following] = user
     ? await Promise.all([
@@ -59,6 +90,27 @@ export default async function ComicDetails({
             </span>
           </div>
           <h1>{publication.title}</h1>
+          {!!publication.tags?.length && (
+            <div className="detail-tags">
+              {publication.tags.map((tag) => (
+                <Link
+                  className="tag"
+                  key={tag}
+                  href={`/${publication.kind === "comic" ? "comics" : "art"}?search=${encodeURIComponent(tag)}`}
+                >
+                  {tag}
+                </Link>
+              ))}
+            </div>
+          )}
+          {publication.pricePaise &&
+          ["purchase", "both"].includes(publication.access) ? (
+            <p>
+              Individual purchase price: ₹
+              {(publication.pricePaise / 100).toFixed(2)} · Checkout coming
+              later
+            </p>
+          ) : null}
           <p className="detail-byline">
             Story & art by{" "}
             <Link href={`/creators/${publication.authorId}`}>
@@ -101,6 +153,13 @@ export default async function ComicDetails({
         </div>
       </section>
       {publication.access !== "free" && <BillingNotice />}
+      {!!related.length && (
+        <section className="section">
+          <h2>More stories like this</h2>
+          <p className="muted">Explore titles with shared tags and genres.</p>
+          <ComicGrid comics={related.map(comicCard)} />
+        </section>
+      )}
     </>
   );
 }

@@ -244,3 +244,23 @@ it("accepts an empty access selector but rejects unknown access modes", () => {
   );
   assert.equal(catalogSchema.safeParse({ access: "admin" }).success, false);
 });
+
+it("stores normalized tags and accepts only integer minor-unit prices", () => {
+  const input = {
+    title: "A new comic",
+    synopsis: "An original comic with a full synopsis.",
+    genre: "Fantasy",
+    kind: "comic",
+    access: "purchase",
+    ageRating: "everyone",
+    rightsConfirmed: true,
+    tags: [" Space ", "space"],
+    pricePaise: 14950,
+  };
+  assert.deepEqual(publicationSchema.parse(input).tags, ["space"]);
+  for (const pricePaise of [-1, 0, 1.5, Infinity])
+    assert.equal(
+      publicationSchema.safeParse({ ...input, pricePaise }).success,
+      false,
+    );
+});

@@ -1,6 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useState } from "react";
 import {
   genres,
   type AccessModel,
@@ -9,9 +8,9 @@ import {
   type PublicationKind,
   type PublicationStatus,
 } from "@/domain/models";
-import { requestJson, useMutation } from "./mutation";
+import { requestJson } from "./mutation";
 import { Status } from "./ui";
-
+import { PublicationMedia } from "./publication-media";
 export interface EditorData {
   id: string;
   title: string;
@@ -26,281 +25,397 @@ export interface EditorData {
   pageCount: number;
   hasCover: boolean;
   feedback: string | null;
+  tags?: string[];
+  pricePaise?: number | null;
+  pages?: { id: string; number: number; alt: string; storyText?: string }[];
 }
 export function PublicationEditor({
   publication,
+  initialKind,
 }: {
   publication?: EditorData;
+  initialKind?: PublicationKind;
 }) {
-  const router = useRouter(),
-    action = useMutation();
+  const [draft, setDraft] = useState(publication);
+  const [kind, setKind] = useState<PublicationKind | undefined>(
+    publication?.kind ?? initialKind,
+  );
+  const [step, setStep] = useState(0),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const [access, setAccess] = useState<AccessModel>(
+    publication?.access ?? "free",
+  );
   const editable =
-    !publication || ["draft", "changes_requested"].includes(publication.status);
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const input = {
-      title: form.get("title"),
-      synopsis: form.get("synopsis"),
-      genre: form.get("genre"),
-      kind: publication?.kind ?? form.get("kind"),
-      access: form.get("access"),
-      ageRating: form.get("ageRating"),
-      rightsConfirmed: form.get("rightsConfirmed") === "on",
-    };
-    await action.run(async () => {
-      if (publication)
+    !draft || ["draft", "changes_requested"].includes(draft.status);
+  const steps = [
+    "Details",
+    kind === "artwork" ? "Artwork" : "Pages & text",
+    "Access & price",
+    "Review",
+  ];
+  async function save(form: FormData, pricing = false) {
+    setBusy(true);
+    setError("");
+    try {
+      const value = {
+        title: draft?.title,
+        synopsis: draft?.synopsis,
+        genre: draft?.genre ?? "Fantasy",
+        kind: kind!,
+        access: draft?.access ?? "free",
+        ageRating: draft?.ageRating ?? "everyone",
+        rightsConfirmed: draft?.rightsConfirmed ?? false,
+        tags: draft?.tags ?? [],
+        pricePaise: draft?.pricePaise ?? null,
+      };
+      if (pricing) {
+        value.access = kind === "artwork" ? "free" : access;
+        value.rightsConfirmed = form.get("rightsConfirmed") === "on";
+        value.pricePaise = ["purchase", "both"].includes(value.access)
+          ? Math.round(Number(form.get("price")) * 100)
+          : null;
+      } else {
+        value.title = String(form.get("title"));
+        value.synopsis = String(form.get("synopsis"));
+        value.genre = form.get("genre") as Genre;
+        value.ageRating = form.get("ageRating") as AgeRating;
+        value.tags = String(form.get("tags") ?? "")
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean);
+      }
+      let id = draft?.id;
+      if (id)
         await requestJson(
-          `/api/publications/${publication.id}`,
-          { publication: input, version: publication.version },
+          `/api/publications/${id}`,
+          { publication: value, version: draft!.version },
           "PATCH",
         );
       else {
         const result = await requestJson<{ id: string }>(
           "/api/publications",
-          input,
+          value,
         );
-        router.push(`/studio/publications/${result.id}`);
+        id = result.id;
+        window.history.replaceState(null, "", `/studio/publications/${id}`);
       }
-    }, "Draft saved.");
-  }
-  return (
-    <section className="panel editor-panel">
-      {publication && (
-        <div className="section-head">
-          <h2>Publication details</h2>
-          <Status value={publication.status} />
-        </div>
-      )}
-      {publication?.feedback && (
-        <div className="notice">
-          <strong>Editorial feedback</strong>
-          <br />
-          {publication.feedback}
-        </div>
-      )}
-      <form onSubmit={submit}>
-        <fieldset disabled={!editable || action.pending}>
-          <label className="field">
-            Title
-            <input
-              name="title"
-              required
-              minLength={3}
-              maxLength={100}
-              defaultValue={publication?.title}
-              placeholder="The name of your next world"
-            />
-          </label>
-          <div className="form-grid">
-            <label className="field">
-              Publication type
-              <select
-                name="kind"
-                defaultValue={publication?.kind ?? "comic"}
-                disabled={!!publication}
-              >
-                <option value="comic">Comic</option>
-                <option value="artwork">Artwork</option>
-              </select>
-            </label>
-            <label className="field">
-              Genre
-              <select
-                name="genre"
-                defaultValue={publication?.genre ?? "Fantasy"}
-              >
-                {genres.map((genre) => (
-                  <option key={genre}>{genre}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label className="field">
-            Synopsis
-            <textarea
-              name="synopsis"
-              minLength={20}
-              maxLength={1500}
-              required
-              defaultValue={publication?.synopsis}
-              placeholder="Introduce your story in at least 20 characters."
-            />
-          </label>
-          <div className="form-grid">
-            <label className="field">
-              Reading access
-              <select
-                name="access"
-                defaultValue={publication?.access ?? "free"}
-              >
-                <option value="free">Free with an account</option>
-                <option value="membership">Membership</option>
-                <option value="purchase">Individual purchase</option>
-                <option value="both">Membership or purchase</option>
-              </select>
-            </label>
-            <label className="field">
-              Age rating
-              <select
-                name="ageRating"
-                defaultValue={publication?.ageRating ?? "everyone"}
-              >
-                <option value="everyone">Everyone</option>
-                <option value="teen">Teen · 13+</option>
-                <option value="mature">Mature · 18+</option>
-              </select>
-            </label>
-          </div>
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              name="rightsConfirmed"
-              defaultChecked={publication?.rightsConfirmed}
-            />
-            I own this work or have permission to publish it, and have read the
-            community guidelines.
-          </label>
-          <p className="muted">
-            Artwork must use free access. Premium comics remain preview-only for
-            readers without an entitlement; payments are not connected yet.
-          </p>
-          {editable && (
-            <button className="primary" disabled={action.pending}>
-              {action.pending
-                ? "Saving…"
-                : publication
-                  ? "Save draft"
-                  : "Create draft"}
-            </button>
-          )}
-        </fieldset>
-        <p role="alert" className="form-error">
-          {action.error}
-        </p>
-        <p role="status" className="form-success">
-          {action.success}
-        </p>
-      </form>
-      {publication && editable && (
-        <div className="submit-panel">
-          <h3>Ready for the editorial team?</h3>
-          <p className="muted">
-            Upload a cover
-            {publication.kind === "comic"
-              ? " and at least five pages in reading order"
-              : ""}
-            , confirm rights, then submit. Submitted work is locked while it is
-            reviewed.
-          </p>
-          <button
-            className="secondary"
-            disabled={
-              action.pending ||
-              !publication.hasCover ||
-              (publication.kind === "comic" && publication.pageCount < 5)
-            }
-            onClick={() =>
-              action.run(async () => {
-                await requestJson(
-                  `/api/publications/${publication.id}/submit`,
-                  { version: publication.version },
-                );
-              }, "Submitted for editorial review.")
-            }
-          >
-            Submit for review
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
-export function UploadForm({ publication }: { publication: EditorData }) {
-  const action = useMutation();
-  const editable = ["draft", "changes_requested"].includes(publication.status);
-  async function upload(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const element = event.currentTarget;
-    const form = new FormData(element);
-    form.set("version", String(publication.version));
-    await action.run(async () => {
-      const response = await fetch(
-        `/api/publications/${publication.id}/upload`,
-        { method: "POST", body: form },
-      );
+      const response = await fetch(`/api/publications/${id}`);
       const data = await response.json();
       if (!response.ok)
-        throw new Error(data.error?.message ?? "Upload failed.");
-      element.reset();
-    }, "Image uploaded.");
+        throw new Error(data.error?.message ?? "Could not reload draft.");
+      setDraft(data);
+      setStep(pricing ? 3 : 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save draft.");
+    } finally {
+      setBusy(false);
+    }
   }
+  if (!kind)
+    return (
+      <section className="publication-kind-picker">
+        <button className="panel" onClick={() => setKind("comic")}>
+          <h2>Create a comic</h2>
+          <p>
+            A cover, ordered pages, story text, and your choice of reading
+            access.
+          </p>
+          <span className="text-link">Start a comic</span>
+        </button>
+        <button className="panel" onClick={() => setKind("artwork")}>
+          <h2>Publish artwork</h2>
+          <p>
+            A single original image with a description and tags for discovery.
+          </p>
+          <span className="text-link">Start artwork</span>
+        </button>
+      </section>
+    );
   return (
-    <section className="panel">
-      <h2>Artwork & pages</h2>
-      {publication.hasCover && (
-        <img
-          className="editor-cover"
-          src={`/api/comics/${publication.id}/cover?v=${publication.version}`}
-          alt="Current cover"
-        />
+    <section className="panel publishing-workspace">
+      <div className="section-head">
+        <h2>{kind === "comic" ? "Comic publisher" : "Artwork publisher"}</h2>
+        {draft && <Status value={draft.status} />}
+      </div>
+      <nav className="publishing-steps" aria-label="Publishing steps">
+        {steps.map((label, index) => (
+          <button
+            key={label}
+            type="button"
+            disabled={busy || (!draft && index > 0)}
+            aria-current={step === index ? "step" : undefined}
+            onClick={() => {
+              setError("");
+              setStep(index);
+            }}
+          >
+            <span>{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </nav>
+      {draft?.feedback && (
+        <div className="notice">Editorial feedback: {draft.feedback}</div>
       )}
-      <p className="muted">
-        {publication.hasCover ? "Cover uploaded" : "A cover is required"} ·{" "}
-        {publication.pageCount} pages uploaded
-      </p>
-      {editable && (
-        <form onSubmit={upload}>
-          <fieldset disabled={action.pending}>
+      {step === 0 && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save(new FormData(e.currentTarget));
+          }}
+        >
+          <fieldset disabled={busy || !editable}>
+            <h2>
+              Tell readers about your {kind === "comic" ? "comic" : "artwork"}
+            </h2>
             <label className="field">
-              Upload as
-              <select name="kind">
-                <option value="cover">Cover / artwork</option>
-                {publication.kind === "comic" && (
-                  <option value="page">
-                    Next page (page {publication.pageCount + 1})
-                  </option>
-                )}
-              </select>
+              Title
+              <input
+                name="title"
+                required
+                minLength={3}
+                maxLength={100}
+                defaultValue={draft?.title}
+              />
             </label>
             <label className="field">
-              Image
-              <input
-                type="file"
-                name="file"
-                accept="image/jpeg,image/png,image/webp"
+              {kind === "comic" ? "Synopsis" : "Artwork description"}
+              <textarea
+                name="synopsis"
                 required
+                minLength={20}
+                maxLength={1500}
+                defaultValue={draft?.synopsis}
+              />
+            </label>
+            <div className="form-grid">
+              <label className="field">
+                Genre
+                <select name="genre" defaultValue={draft?.genre ?? "Fantasy"}>
+                  {genres.map((genre) => (
+                    <option key={genre}>{genre}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Age rating
+                <select
+                  name="ageRating"
+                  defaultValue={draft?.ageRating ?? "everyone"}
+                >
+                  <option value="everyone">Everyone</option>
+                  <option value="teen">Teen · 13+</option>
+                  <option value="mature">Mature · 18+</option>
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              Tags
+              <input
+                name="tags"
+                defaultValue={draft?.tags?.join(", ")}
+                placeholder="space adventure, friendship, mystery"
               />
             </label>
             <p className="muted">
-              JPEG, PNG, or WebP. Up to 10 MB. Images are validated, resized,
-              and stripped of metadata before storage.
+              Separate tags with commas. Use up to 20 relevant tags to help
+              readers discover your work.
             </p>
-            <label className="field">
-              Image description
-              <textarea
-                name="alt"
-                required
-                minLength={10}
-                maxLength={1000}
-                placeholder="Describe the scene for readers using assistive technology."
-              />
-            </label>
-            <button className="primary" disabled={action.pending}>
-              {action.pending ? "Processing image…" : "Upload image"}
-            </button>
+            {editable && (
+              <button className="primary">
+                {busy ? "Saving…" : "Save & continue"}
+              </button>
+            )}
           </fieldset>
-          <p role="alert" className="form-error">
-            {action.error}
-          </p>
-          <p role="status" className="form-success">
-            {action.success}
-          </p>
         </form>
       )}
-      <Link href="/guidelines" className="text-link">
-        Publishing guidelines
-      </Link>
+      {step === 1 && draft && (
+        <>
+          <PublicationMedia
+            publication={draft}
+            onChange={setDraft}
+            onBusy={setBusy}
+          />
+          <div className="wizard-actions">
+            <button
+              className="secondary"
+              disabled={busy}
+              onClick={() => setStep(0)}
+            >
+              Back
+            </button>
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() => setStep(2)}
+            >
+              Continue to access
+            </button>
+          </div>
+        </>
+      )}
+      {step === 2 && draft && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save(new FormData(e.currentTarget), true);
+          }}
+        >
+          <fieldset disabled={busy || !editable}>
+            <h2>
+              {kind === "comic"
+                ? "Choose how readers get access"
+                : "Publishing permissions"}
+            </h2>
+            {kind === "comic" ? (
+              <>
+                <label className="field">
+                  Reading access
+                  <select
+                    aria-label="Reading access"
+                    value={access}
+                    onChange={(e) => setAccess(e.target.value as AccessModel)}
+                  >
+                    <option value="free">Free with an account</option>
+                    <option value="membership">Membership</option>
+                    <option value="purchase">Individual purchase</option>
+                    <option value="both">Membership or purchase</option>
+                  </select>
+                </label>
+                {["purchase", "both"].includes(access) && (
+                  <label className="field">
+                    Price (INR)
+                    <input
+                      name="price"
+                      type="number"
+                      required
+                      min="0.01"
+                      max="1000000"
+                      step="0.01"
+                      defaultValue={
+                        draft.pricePaise ? draft.pricePaise / 100 : ""
+                      }
+                      placeholder="99.00"
+                    />
+                  </label>
+                )}
+                <p className="muted">
+                  The first four pages are a free preview. Your price is saved
+                  with the comic; checkout is not connected yet.
+                </p>
+              </>
+            ) : (
+              <p>Your artwork is publicly viewable for free.</p>
+            )}
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                name="rightsConfirmed"
+                required
+                defaultChecked={draft.rightsConfirmed}
+              />
+              I own this work or have permission to publish it, and have read
+              the community guidelines.
+            </label>
+            <div className="wizard-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setStep(1)}
+              >
+                Back
+              </button>
+              <button className="primary">Save & review</button>
+            </div>
+          </fieldset>
+        </form>
+      )}
+      {step === 3 && draft && (
+        <>
+          <h2>Review before submission</h2>
+          <div className="publication-review">
+            {draft.hasCover && (
+              <img
+                src={`/api/comics/${draft.id}/cover?v=${draft.version}`}
+                alt={draft.title}
+              />
+            )}
+            <div>
+              <h3>{draft.title}</h3>
+              <p>{draft.synopsis}</p>
+              <p>{draft.tags?.join(" · ")}</p>
+              <p>
+                {kind === "comic"
+                  ? `${draft.pageCount} pages · ${draft.access}`
+                  : "Public artwork"}
+                {draft.pricePaise
+                  ? ` · ₹${(draft.pricePaise / 100).toFixed(2)}`
+                  : ""}
+              </p>
+            </div>
+          </div>
+          <ul className="review-checklist">
+            <li>
+              {draft.hasCover ? "✓" : "○"}{" "}
+              {kind === "comic" ? "Cover" : "Artwork"} uploaded
+            </li>
+            {kind === "comic" && (
+              <li>
+                {draft.pageCount >= 5 ? "✓" : "○"} At least five comic pages (
+                {draft.pageCount} saved)
+              </li>
+            )}
+            <li>
+              {draft.rightsConfirmed ? "✓" : "○"} Publishing rights confirmed
+            </li>
+          </ul>
+          <p className="muted">
+            Submitting locks editing until the editorial team reviews your work.
+          </p>
+          {editable && (
+            <button
+              className="primary"
+              disabled={
+                busy ||
+                !draft.hasCover ||
+                !draft.rightsConfirmed ||
+                (kind === "comic" && draft.pageCount < 5)
+              }
+              onClick={async () => {
+                setBusy(true);
+                setError("");
+                try {
+                  await requestJson(`/api/publications/${draft.id}/submit`, {
+                    version: draft.version,
+                  });
+                  setDraft({
+                    ...draft,
+                    status: "submitted",
+                    version: draft.version + 1,
+                  });
+                } catch (e) {
+                  setError(
+                    e instanceof Error ? e.message : "Could not submit.",
+                  );
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Submit for review
+            </button>
+          )}
+          {draft.status === "submitted" && (
+            <div className="notice" role="status">
+              Submitted. Your work is awaiting editorial review.
+            </div>
+          )}
+        </>
+      )}
+      <p role="alert" className="form-error">
+        {error}
+      </p>
     </section>
   );
 }

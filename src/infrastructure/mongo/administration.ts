@@ -134,6 +134,20 @@ export class MongoAdministration implements AdministrationRepository {
       await mongoClient()
     ).withSession((session) =>
       session.withTransaction(async () => {
+        const current = await db
+          .collection<AccountDoc>("accounts")
+          .findOne({ _id: id }, { session });
+        if (patch.role === "author" && current?.role === "reader") {
+          const approved = await db
+            .collection("authorApplications")
+            .findOne({ userId: id, status: "approved" }, { session });
+          ensure(
+            approved,
+            "APPLICATION_REQUIRED",
+            "Review and approve this reader’s author application before granting publishing access.",
+            409,
+          );
+        }
         const result = await db
           .collection<AccountDoc>("accounts")
           .updateOne(

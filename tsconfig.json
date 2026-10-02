@@ -6,7 +6,7 @@
       "dom.iterable",
       "esnext"
     ],
-    "allowJs": false,
+    "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -39,7 +39,7 @@
     "tests/integration/**/*.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "next.config.ts",
+    "next.config.mjs",
     "tests/e2e/**/*.ts",
     "playwright.config.ts"
   ],

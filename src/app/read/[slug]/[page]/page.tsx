@@ -6,6 +6,33 @@ import { currentUser } from "@/server/session";
 import { ProgressRecorder, ReportForm } from "@/components/reader-actions";
 import { accessLabels } from "@/components/ui";
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; page: string }>;
+}) {
+  const { slug, page } = await params;
+  const number = Number(page);
+  const publication = await getServices().publications.findBySlug(slug);
+  if (
+    !publication ||
+    publication.status !== "published" ||
+    !Number.isSafeInteger(number) ||
+    number < 1 ||
+    number > publication.pageCount
+  )
+    return { robots: { index: false, follow: false } };
+  const preview =
+    number <= 4
+      ? await getServices().publications.page(publication.id, number)
+      : null;
+  return {
+    title: `${publication.title} · Page ${number}`,
+    description: (preview?.storyText || publication.synopsis).slice(0, 160),
+    robots: { index: number <= 4, follow: true },
+  };
+}
+
 export default async function Read({
   params,
 }: {
@@ -13,7 +40,7 @@ export default async function Read({
 }) {
   const route = await params,
     number = Number(route.page);
-  if (!Number.isSafeInteger(number) || number < 1 || number > 300) notFound();
+  if (!Number.isSafeInteger(number) || number < 1) notFound();
   const services = getServices();
   const publication = await services.publications.findBySlug(route.slug);
   if (
@@ -56,6 +83,12 @@ export default async function Read({
                 height={1000}
                 fetchPriority="high"
               />
+              {page.storyText && (
+                <section className="panel page-transcript">
+                  <h2>Page {number} story text</h2>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{page.storyText}</p>
+                </section>
+              )}
               {user && (
                 <ProgressRecorder comicId={publication.id} page={number} />
               )}

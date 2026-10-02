@@ -21,6 +21,19 @@ export const publicationSchema = z
     kind: z.enum(["comic", "artwork"]),
     access: z.enum(["free", "membership", "purchase", "both"]),
     ageRating: z.enum(["everyone", "teen", "mature"]),
+    tags: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(40)
+          .transform((value) => value.toLowerCase()),
+      )
+      .max(20)
+      .transform((values) => [...new Set(values)])
+      .optional(),
+    pricePaise: z.number().int().min(1).max(100_000_000).nullable().optional(),
     rightsConfirmed: z.boolean(),
   })
   .strict()
@@ -28,6 +41,13 @@ export const publicationSchema = z
     message: "Artwork is publicly viewable; use free access.",
     path: ["access"],
   });
+export const pageTextSchema = z
+  .object({
+    version: z.number().int().min(1),
+    alt: z.string().trim().min(10).max(1000),
+    storyText: z.string().trim().max(12000),
+  })
+  .strict();
 export type PublicationInput = z.infer<typeof publicationSchema>;
 export const versionSchema = z
   .object({ version: z.number().int().min(1) })
@@ -74,6 +94,6 @@ export const policySchema = z
   .object({ adsEnabled: z.boolean(), submissionsEnabled: z.boolean() })
   .strict();
 export const progressSchema = z
-  .object({ page: z.number().int().min(1).max(300) })
+  .object({ page: z.number().int().min(1) })
   .strict();
 export const toggleSchema = z.object({ enabled: z.boolean() }).strict();

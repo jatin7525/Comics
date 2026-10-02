@@ -2,15 +2,21 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
 import sharp from "sharp";
 
 const origin = process.env.E2E_BASE_URL ?? "http://localhost:3100";
+const studioOrigin = "http://localhost:3101";
+const adminOrigin = "http://localhost:3102";
 const password = process.env.SEED_PASSWORD!;
 if (!["localhost", "127.0.0.1"].includes(new URL(origin).hostname)) {
   throw new Error(
     "Browser tests may only target the local seeded application.",
   );
 }
-async function login(request: APIRequestContext, account: string) {
+async function login(
+  request: APIRequestContext,
+  account: string,
+  loginOrigin = origin,
+) {
   const response = await request.post("/api/auth/login", {
-    headers: { origin },
+    headers: { origin: loginOrigin },
     data: { email: `${account}@astra.test`, password },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -121,7 +127,7 @@ test("reader sign-in, persistent library/progress, authorization and CSRF", asyn
         data: {},
       })
     ).status(),
-  ).toBe(403);
+  ).toBe(404);
   expect(
     (
       await page.request.patch("/api/admin/policies", {
@@ -129,7 +135,7 @@ test("reader sign-in, persistent library/progress, authorization and CSRF", asyn
         data: { adsEnabled: true, submissionsEnabled: true },
       })
     ).status(),
-  ).toBe(403);
+  ).toBe(404);
   expect(
     (
       await page.request.post("/api/auth/logout", {
@@ -137,8 +143,7 @@ test("reader sign-in, persistent library/progress, authorization and CSRF", asyn
       })
     ).status(),
   ).toBe(403);
-  await page.goto("/admin");
-  await expect(page).toHaveURL(/\/forbidden$/);
+  expect((await page.goto("/admin"))?.status()).toBe(404);
   expect(
     (
       await request.post("/api/auth/register", {
@@ -189,32 +194,32 @@ test("membership does not unlock purchase-only stories and there is no payment b
 test("author upload, moderation, published discovery and cross-author protection", async ({
   browser,
 }) => {
-  const author = await browser.newContext({ baseURL: origin });
-  const admin = await browser.newContext({ baseURL: origin });
-  const other = await browser.newContext({ baseURL: origin });
+  const author = await browser.newContext({ baseURL: studioOrigin });
+  const admin = await browser.newContext({ baseURL: adminOrigin });
+  const other = await browser.newContext({ baseURL: studioOrigin });
   try {
-    await login(author.request, "author");
-    await login(admin.request, "admin");
-    await login(other.request, "author2");
+    await login(author.request, "author", studioOrigin);
+    await login(admin.request, "admin", adminOrigin);
+    await login(other.request, "author2", studioOrigin);
     const page = await author.newPage();
     const title = `Browser journey ${Date.now()}`;
     await page.goto("/studio/publications/new");
+    await page.getByRole("button", { name: /Start a comic/ }).click();
     await page.getByLabel("Title", { exact: true }).fill(title);
     await page
       .getByLabel("Synopsis")
       .fill(
         "A complete sample story created to verify the real publishing workflow.",
       );
-    await page.getByLabel(/I own this work/).check();
     await page
-      .getByRole("button", { name: "Create draft", exact: true })
+      .getByRole("button", { name: "Save & continue", exact: true })
       .click();
     await expect(page).toHaveURL(/\/studio\/publications\/[0-9a-f-]{36}$/);
     const id = page.url().split("/").at(-1)!;
     expect(
       (
         await other.request.patch(`/api/publications/${id}`, {
-          headers: { origin },
+          headers: { origin: studioOrigin },
           data: {
             version: 1,
             publication: {
@@ -236,42 +241,32 @@ test("author upload, moderation, published discovery and cross-author protection
     })
       .png()
       .toBuffer();
-    await page.getByLabel("Upload as").selectOption("cover");
-    await page.getByLabel("Image", { exact: true }).setInputFiles({
-      name: "cover.png",
-      mimeType: "image/png",
-      buffer: image,
-    });
     await page
-      .getByLabel("Image description")
-      .fill("A purple test cover illustration.");
-    await page
-      .getByRole("button", { name: "Upload image", exact: true })
-      .click();
-    await expect(
-      page.getByText("Cover uploaded · 0 pages uploaded"),
-    ).toBeVisible();
-    for (let number = 1; number <= 5; number++) {
-      await page.getByLabel("Upload as").selectOption("page");
-      await page.getByLabel("Image", { exact: true }).setInputFiles({
-        name: `page-${number}.png`,
+      .getByLabel("Cover / thumbnail", { exact: true })
+      .setInputFiles({
+        name: "cover.png",
         mimeType: "image/png",
         buffer: image,
       });
-      await page
-        .getByLabel("Image description")
-        .fill(`A purple illustrated test scene, page ${number}.`);
-      await page
-        .getByRole("button", { name: "Upload image", exact: true })
-        .click();
-      await expect(
-        page.getByText(`Cover uploaded · ${number} pages uploaded`),
-      ).toBeVisible();
-    }
+    await page
+      .getByLabel("Select comic pages")
+      .setInputFiles(
+        Array.from({ length: 5 }, (_, index) => ({
+          name: `page-${index + 1}.png`,
+          mimeType: "image/png",
+          buffer: image,
+        })),
+      );
+    await page
+      .getByRole("button", { name: "Upload selected images (6)", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Saved pages · 5", exact: true }),
+    ).toBeVisible();
     const malicious = await author.request.post(
       `/api/publications/${id}/upload`,
       {
-        headers: { origin },
+        headers: { origin: studioOrigin },
         multipart: {
           kind: "page",
           version: "7",
@@ -285,6 +280,14 @@ test("author upload, moderation, published discovery and cross-author protection
       },
     );
     expect(malicious.status()).toBe(400);
+    await page
+      .getByRole("button", { name: "Continue to access", exact: true })
+      .click();
+    await page.getByLabel(/I own this work/).check();
+    await page
+      .getByRole("button", { name: "Save & review", exact: true })
+      .click();
+
     await page
       .getByRole("button", { name: "Submit for review", exact: true })
       .click();
@@ -304,16 +307,16 @@ test("author upload, moderation, published discovery and cross-author protection
     await expect(
       reviewer.getByText("publication.published", { exact: true }).first(),
     ).toBeVisible();
-    await reviewer.goto(`/comics?search=${encodeURIComponent(title)}`);
+    await reviewer.goto(`${origin}/comics?search=${encodeURIComponent(title)}`);
     await expect(
       reviewer.getByRole("heading", { name: title, exact: true }),
     ).toBeVisible();
     expect(
       (
         await admin.request.post(`/api/admin/content/${id}`, {
-          headers: { origin },
+          headers: { origin: adminOrigin },
           data: {
-            version: 9,
+            version: 10,
             reason:
               "Browser verification complete; hide the temporary fixture.",
           },

@@ -30,3 +30,16 @@ A local production build on port 3101, with local-storage testing explicitly ena
 This is a development-machine smoke measurement with a tiny seeded catalog, not a benchmark or capacity promise. It excludes browser execution, images, internet latency and sustained traffic. The script rejects non-loopback targets and caps its workload. The production-mode server was stopped after this check.
 
 CI is configured to run lint, typecheck, unit/integration tests and both builds. The workflow has not yet been observed on GitHub. Docker packaging, live R2 and production Cloudflare compatibility have not been verified. See SECURITY.md and ARCHITECTURE.md for explicit release gaps.
+
+
+## Service separation — 2 October 2026
+
+Reader, Studio and Admin now build as separate applications. All three production builds and standalone entry/route-manifest boundary checks passed. ESLint and TypeScript checks cover all three apps. Unit tests: 18 passed. MongoDB/R2 integration tests: 11 passed, including audience-bound sessions, scoped logout, staff registration rejection and live role demotion.
+
+`npm run test:services` passed against the three running local processes. It verifies wrong-service routes return 404; invalid workspace roles return 403; replayed tokens return 401 even when their cookies are renamed; cross-origin admin writes return 403; valid sessions reach their own handlers and workspace screens. Chromium checks cover standalone login, reader navigation, actual staff dashboards and mobile overflow. No sample catalog was seeded. Local test authentication counters are reset only for the loopback identity before this explicitly invoked test.
+
+A separate Firefox run visited art, catalog, About, missing pages and unauthenticated Studio redirects five times without a runtime error. The previously reported negative Performance.measure timestamp was not reproduced. A similar development-only error is tracked upstream at https://github.com/vercel/next.js/issues/86060; this result is not proof that the intermittent upstream issue is fixed. No global Performance API patch or error suppression was added.
+
+Original seeded-catalog browser journeys have been adapted for the split origins but were not rerun against the user's empty catalog. The live service-boundary checks plus isolated publishing integration tests were used instead. Docker images, separate production credentials, network gateway policies and cloud deployments remain unverified.
+
+Author onboarding: 12 integration tests cover the expanded backend, including private sample access, requests for changes, resubmission, atomic approval and session revocation. The dedicated local browser journey passed registration through sample upload, admin approval and first Studio sign-in, then removed its temporary account and sample. This does not establish production load capacity or verify ownership of submitted art.

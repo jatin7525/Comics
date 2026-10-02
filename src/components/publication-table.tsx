@@ -11,11 +11,13 @@ export function PublicationTable({
   if (!publications.length)
     return (
       <Empty
-        title="Your next story starts here."
-        href="/studio/publications/new"
+        title={admin ? "No publications yet." : "Your next story starts here."}
+        href={admin ? undefined : "/studio/publications/new"}
         label="Create a publication"
       >
-        Save a draft, upload your artwork, and submit it for review.
+        {admin
+          ? "Author submissions will appear here for editorial review."
+          : "Save a draft, upload your artwork, and submit it for review."}
       </Empty>
     );
   return (

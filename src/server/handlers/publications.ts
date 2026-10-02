@@ -1,5 +1,6 @@
+import { editorData } from "../editor-data";
 import { NextResponse } from "next/server";
-import sharp from "sharp";
+import { processImage } from "../image-upload";
 import { z } from "zod";
 import { api, actor, boundedBody, jsonInput } from "../http";
 import { getServices } from "../services";
@@ -10,8 +11,9 @@ import {
   publicationSchema,
   updatePublicationSchema,
   versionSchema,
+  pageTextSchema,
 } from "@/domain/validation";
-import { AppError, ensure } from "@/domain/errors";
+import { ensure } from "@/domain/errors";
 import { canManagePublication } from "@/domain/access";
 
 export const catalog = api(async ({ request }) => {
@@ -81,52 +83,7 @@ export const upload = api(
     const version = z.coerce.number().int().min(1).parse(form.get("version"));
     const alt = z.string().trim().min(10).max(1000).parse(form.get("alt"));
     const file = form.get("file");
-    ensure(
-      file instanceof File && file.size > 0 && file.size <= 10 * 1024 * 1024,
-      "INVALID_IMAGE",
-      "Upload an image up to 10 MB.",
-    );
-    ensure(
-      ["image/jpeg", "image/png", "image/webp"].includes(file.type),
-      "INVALID_IMAGE",
-      "Use JPEG, PNG, or WebP images. SVG and animated images are not accepted.",
-    );
-    const source = Buffer.from(await file.arrayBuffer());
-    const pipeline = sharp(source, {
-      limitInputPixels: 25_000_000,
-      failOn: "warning",
-    });
-    const metadata = await pipeline.metadata().catch(() => {
-      throw new AppError(
-        "INVALID_IMAGE",
-        "This image could not be decoded. Upload a valid JPEG, PNG, or WebP.",
-      );
-    });
-    ensure(
-      ["jpeg", "png", "webp"].includes(metadata.format ?? "") &&
-        (metadata.pages ?? 1) === 1,
-      "INVALID_IMAGE",
-      "Use a single-frame JPEG, PNG, or WebP image.",
-    );
-    ensure(
-      (metadata.width ?? 0) >= 100 && (metadata.height ?? 0) >= 100,
-      "INVALID_IMAGE",
-      "Images must be at least 100 × 100 pixels.",
-    );
-    const processed = await pipeline
-      .rotate()
-      .resize({
-        width: kind === "cover" ? 1000 : 1800,
-        withoutEnlargement: true,
-      })
-      .webp({ quality: 85 })
-      .toBuffer()
-      .catch(() => {
-        throw new AppError(
-          "INVALID_IMAGE",
-          "This image is damaged or unsupported.",
-        );
-      });
+    const processed = await processImage(file, kind === "cover" ? 1000 : 1800);
     await getServices().publishing.upload(
       actor(context),
       id,
@@ -135,9 +92,12 @@ export const upload = api(
       processed,
       alt,
     );
-    return NextResponse.json({ ok: true }, { status: 201 });
+    return NextResponse.json(
+      { ok: true, version: version + 1 },
+      { status: 201 },
+    );
   },
-  { roles: ["author", "admin"], limit: 40 },
+  { roles: ["author", "admin"], limit: 120 },
 );
 export const cover = api(
   async (context) => {
@@ -168,12 +128,7 @@ export const cover = api(
 export const media = api(
   async (context) => {
     const id = idSchema.parse(context.params.id);
-    const number = z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(300)
-      .parse(context.params.page);
+    const number = z.coerce.number().int().min(1).parse(context.params.page);
     const object = await getServices().reading.image(id, number, context.user);
     return new Response(object.body, {
       headers: {
@@ -189,12 +144,7 @@ export const media = api(
 export const studioMedia = api(
   async (context) => {
     const id = idSchema.parse(context.params.id);
-    const number = z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(300)
-      .parse(context.params.page);
+    const number = z.coerce.number().int().min(1).parse(context.params.page);
     await getServices().publishing.owned(actor(context), id);
     const page = await getServices().publications.page(id, number);
     ensure(page, "NOT_FOUND", "Page not found.", 404);
@@ -208,4 +158,55 @@ export const studioMedia = api(
     });
   },
   { roles: ["author", "admin"], limit: 500 },
+);
+
+export const reorderPages = api(
+  async (context) => {
+    const input = await jsonInput(
+      context.request,
+      z
+        .object({ version: z.number().int().min(1), ids: z.array(idSchema) })
+        .strict(),
+    );
+    await getServices().publishing.reorder(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+      input.ids,
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
+export const editPage = api(
+  async (context) => {
+    const input = await jsonInput(context.request, pageTextSchema);
+    await getServices().publishing.editPage(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+      idSchema.parse(context.params.pageId),
+      input.alt,
+      input.storyText,
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
+
+export const editor = api(
+  async (context) => {
+    const services = getServices();
+    const publication = await services.publishing.owned(
+      actor(context),
+      idSchema.parse(context.params.id),
+    );
+    return NextResponse.json(
+      editorData(
+        publication,
+        await services.publications.pages(publication.id),
+      ),
+    );
+  },
+  { roles: ["author", "admin"] },
 );

@@ -38,6 +38,15 @@ export interface PublicationRepository {
   ): Promise<boolean>;
   page(comicId: string, number: number): Promise<ComicPage | null>;
   pages(comicId: string): Promise<ComicPage[]>;
+  reorderPages(id: string, version: number, ids: string[]): Promise<boolean>;
+  editPage(
+    id: string,
+    version: number,
+    pageId: string,
+    alt: string,
+    storyText: string,
+  ): Promise<boolean>;
+  related(publication: Publication): Promise<Publication[]>;
   addPage(publication: Publication, page: ComicPage): Promise<boolean>;
 }
 export interface EntitlementRepository {

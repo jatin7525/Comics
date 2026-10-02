@@ -13,6 +13,12 @@ export default function Privacy() {
           MongoDB. Comic files are stored separately in private object storage.
         </p>
         <p>
+          Author applications include your introduction, portfolio link,
+          creation-process notes and sample images. Samples are private to you
+          and administrators and are used to review publishing access.
+          Submitting samples does not publish them in the catalog.
+        </p>
+        <p>
           A session cookie keeps you signed in. Theme preferences are stored in
           your browser. No payment details are collected. No third-party
           advertising or behavior analytics are active. The interface may

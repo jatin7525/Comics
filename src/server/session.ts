@@ -1,4 +1,5 @@
 import "server-only";
+import { serviceId } from "./service";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -7,8 +8,8 @@ import { getServices } from "./services";
 
 export function cookieName() {
   return process.env.NODE_ENV === "production"
-    ? "__Host-astra_session"
-    : "astra_session";
+    ? `__Host-astra_${serviceId()}_session`
+    : `astra_${serviceId()}_session`;
 }
 export const currentUser = cache(async () =>
   getServices().auth.currentUser((await cookies()).get(cookieName())?.value),

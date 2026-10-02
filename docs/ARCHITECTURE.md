@@ -2,7 +2,7 @@
 
 ## Code boundaries
 
-`src/domain` defines publication states, access rules, types, and validation. `src/application` implements use cases against small repository/storage interfaces. `src/infrastructure` implements MongoDB and object-storage adapters. `src/server` is the composition root, HTTP validation, sessions, and DTO boundary. `src/app` and `src/components` contain server-rendered pages and interactive components.
+`src/domain` defines publication states, access rules, types, and validation. `src/application` implements use cases against small repository/storage interfaces. `src/infrastructure` implements MongoDB and object-storage adapters. `src/server` is the composition root, HTTP validation, sessions, and DTO boundary. `src/app` contains Reader routes; `apps/studio/src/app` and `apps/admin/src/app` contain independently built workspace routes. `src/components` holds shared UI. See SERVICES.md for deployment and authentication boundaries.
 
 Dependencies point toward domain and application interfaces. Reading, publishing, authentication, and administration are separate services. Local R2 and real R2 implement the same storage contract. No generic framework or base repository is introduced just to claim SOLID compliance. Test the policy as pure functions, and test transactions against real MongoDB.
 

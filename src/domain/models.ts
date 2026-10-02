@@ -31,6 +31,7 @@ export interface Account extends User {
   passwordHash: string;
 }
 export interface Session {
+  audience: import("./service").ServiceId;
   id: string;
   userId: string;
   expiresAt: Date;
@@ -46,6 +47,9 @@ export interface Publication {
   kind: PublicationKind;
   access: AccessModel;
   ageRating: AgeRating;
+  tags?: string[];
+  pricePaise?: number | null;
+  previewText?: string;
   rightsConfirmed: boolean;
   status: PublicationStatus;
   coverKey: string | null;
@@ -63,6 +67,7 @@ export interface ComicPage {
   storageKey: string;
   alt: string;
   bytes: number;
+  storyText?: string;
 }
 export interface Entitlement {
   id: string;

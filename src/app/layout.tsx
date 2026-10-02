@@ -1,3 +1,4 @@
+import { serviceId, serviceOrigins } from "@/server/service";
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -25,7 +26,11 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <AppShell user={user ? { name: user.name, role: user.role } : null}>
+          <AppShell
+            service={serviceId()}
+            origins={serviceOrigins()}
+            user={user ? { name: user.name, role: user.role } : null}
+          >
             {children}
           </AppShell>
         </ThemeProvider>

@@ -5,7 +5,11 @@ import type {
   PublicationRepository,
 } from "./ports";
 import type { Publication, User } from "@/domain/models";
-import type { PublicationInput } from "@/domain/validation";
+import {
+  publicationSchema,
+  pageTextSchema,
+  type PublicationInput,
+} from "@/domain/validation";
 import { ensure } from "@/domain/errors";
 import { canManagePublication } from "@/domain/access";
 
@@ -17,6 +21,7 @@ export class PublicationService {
     private readonly administration: AdministrationRepository,
   ) {}
   async create(actor: User, input: PublicationInput) {
+    input = publicationSchema.parse(input);
     ensure(
       actor.status === "active" && ["author", "admin"].includes(actor.role),
       "FORBIDDEN",
@@ -64,6 +69,7 @@ export class PublicationService {
     version: number,
     input: PublicationInput,
   ) {
+    input = publicationSchema.parse(input);
     const current = await this.owned(actor, id);
     ensure(
       current.kind === input.kind,
@@ -96,11 +102,6 @@ export class PublicationService {
       kind === "cover" || current.kind === "comic",
       "INVALID_UPLOAD",
       "Artwork uses a single cover image.",
-    );
-    ensure(
-      kind === "cover" || current.pageCount < 300,
-      "PAGE_LIMIT",
-      "A comic can contain at most 300 pages.",
     );
     const key = `publications/${id}/${kind}/${randomUUID()}.webp`;
     await this.storage.put(key, data, "image/webp");
@@ -135,8 +136,45 @@ export class PublicationService {
     }
     // Old covers remain for recovery; the cleanup job described in operations removes unreferenced objects.
   }
+  async reorder(actor: User, id: string, version: number, ids: string[]) {
+    const current = await this.owned(actor, id);
+    ensure(
+      current.kind === "comic",
+      "INVALID_KIND",
+      "Only comics have ordered pages.",
+    );
+    ensure(
+      await this.publications.reorderPages(id, version, ids),
+      "CONFLICT",
+      "Pages changed or the order is invalid. Reload before saving.",
+      409,
+    );
+  }
+  async editPage(
+    actor: User,
+    id: string,
+    version: number,
+    pageId: string,
+    alt: string,
+    storyText: string,
+  ) {
+    pageTextSchema.parse({ version, alt, storyText });
+    await this.owned(actor, id);
+    ensure(
+      await this.publications.editPage(id, version, pageId, alt, storyText),
+      "CONFLICT",
+      "This page changed or is no longer editable. Reload.",
+      409,
+    );
+  }
   async submit(actor: User, id: string, version: number) {
     const current = await this.owned(actor, id);
+    ensure(
+      !["purchase", "both"].includes(current.access) ||
+        (current.pricePaise ?? 0) > 0,
+      "PRICE_REQUIRED",
+      "Set a purchase price before submitting.",
+    );
     const policy = await this.administration.policy();
     ensure(
       policy.submissionsEnabled,
