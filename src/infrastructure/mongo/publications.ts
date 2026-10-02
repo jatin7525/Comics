@@ -156,6 +156,16 @@ export class MongoPublications implements PublicationRepository {
       .toArray();
     return docs.map((doc) => fromDocument<ComicPage>(doc));
   }
+  async pageRange(comicId: string, from: number, to: number) {
+    const docs = await (
+      await database()
+    )
+      .collection<PageDoc>("pages")
+      .find({ comicId, number: { $gte: from, $lte: to } })
+      .sort({ number: 1 })
+      .toArray();
+    return docs.map((doc) => fromDocument<ComicPage>(doc));
+  }
   async related(publication: Publication) {
     const docs = await (
       await database()

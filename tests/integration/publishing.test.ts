@@ -391,6 +391,37 @@ describe("persistent publishing workflow", { concurrency: false }, () => {
       /entitlement/,
     );
   });
+  it("loads scroll batches only up to the first locked page", async () => {
+    const guest = await reading.pages(created.id, 3, 10, null);
+    assert.deepEqual(
+      guest.pages.map((page) => page.number),
+      [3, 4],
+    );
+    assert.equal(guest.gate, "login_required");
+    assert.equal(guest.gatePage, 5);
+    assert.equal(guest.nextFrom, null);
+    const reader = await reading.pages(created.id, 1, 10, {
+      ...author,
+      role: "reader",
+    });
+    assert.equal(reader.pages.length, 4);
+    assert.equal(reader.gate, "payment_required");
+    assert.ok(
+      !JSON.stringify(reader.pages).includes("Privatesecret"),
+      "story text must not be returned to readers",
+    );
+    const firstBatch = await reading.pages(created.id, 1, 2, null);
+    assert.deepEqual(
+      [firstBatch.pages.length, firstBatch.gate, firstBatch.nextFrom],
+      [2, null, 3],
+    );
+    const locked = await reading.pages(created.id, 5, 4, null);
+    assert.deepEqual([locked.pages, locked.gatePage], [[], 5]);
+    await assert.rejects(
+      reading.pages(created.id, 6, 4, null),
+      /not available/,
+    );
+  });
   it("supports membership and checks expiry on every protected request", async () => {
     const db = await database();
     await db.collection("entitlements").insertOne({

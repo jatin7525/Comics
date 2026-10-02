@@ -13,10 +13,13 @@ import {
   versionSchema,
   pageTextSchema,
   chaptersSchema,
+  pageBatchSchema,
 } from "@/domain/validation";
 import { ensure } from "@/domain/errors";
 import { canManagePublication } from "@/domain/access";
 
+const PAGE_CACHE_SECONDS = 7 * 24 * 60 * 60;
+const COVER_CACHE_SECONDS = 60 * 60;
 export const catalog = api(async ({ request }) => {
   const input = catalogSchema.parse(
     Object.fromEntries(request.nextUrl.searchParams),
@@ -119,7 +122,11 @@ export const cover = api(
     return new Response(object.body, {
       headers: {
         "Content-Type": object.contentType,
-        "Cache-Control": "private, no-store",
+        // Browser-only caching for public covers; drafts stay uncached so workspace edits show at once.
+        "Cache-Control":
+          publication.status === "published"
+            ? `private, max-age=${COVER_CACHE_SECONDS}`
+            : "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },
     });
@@ -134,7 +141,9 @@ export const media = api(
     return new Response(object.body, {
       headers: {
         "Content-Type": object.contentType,
-        "Cache-Control": "private, no-store",
+        // Readers request pages with ?v=<publication version>, so any republish changes the URL.
+        // `private` keeps the bytes out of shared/CDN caches; access is rechecked on every uncached request.
+        "Cache-Control": `private, max-age=${PAGE_CACHE_SECONDS}, immutable`,
         "X-Content-Type-Options": "nosniff",
         "Content-Disposition": "inline",
       },
@@ -142,6 +151,18 @@ export const media = api(
   },
   { limit: 500 },
 );
+export const pageBatch = api(async (context) => {
+  const input = pageBatchSchema.parse(
+    Object.fromEntries(context.request.nextUrl.searchParams),
+  );
+  const { publication, ...batch } = await getServices().reading.pages(
+    idSchema.parse(context.params.id),
+    input.from,
+    input.limit,
+    context.user,
+  );
+  return NextResponse.json({ ...batch, version: publication.version });
+});
 export const studioMedia = api(
   async (context) => {
     const id = idSchema.parse(context.params.id);
