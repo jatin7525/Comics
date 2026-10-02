@@ -195,17 +195,53 @@ try {
     }),
   ).toBeVisible();
   await expect(
-    reader.getByText("Chapter 1 · Liftoff", { exact: false }),
+    reader.getByRole("heading", { name: "Chapter 1 · Liftoff" }),
   ).toBeVisible();
+  const chapterSelect = reader.getByRole("combobox", { name: "Chapter" });
+  await expect(chapterSelect).toHaveValue(publication.chapters[0].id);
   await expect(
-    reader
-      .getByRole("navigation", { name: "Chapters" })
-      .getByRole("link", { name: "2. Homecoming" }),
-  ).toHaveAttribute("href", `/read/${publication.slug}/6`);
+    reader.getByRole("button", { name: "Previous chapter" }),
+  ).toBeDisabled();
+  // The first three pages render on the server; scrolling fetches page 4 and then stops at the gate.
+  await expect(reader.locator("img.reading-page")).toHaveCount(3);
+  await reader.mouse.wheel(0, 20000);
+  await expect(reader.locator("img.reading-page")).toHaveCount(4);
+  await expect(
+    reader.getByRole("link", { name: "Sign in to continue", exact: true }),
+  ).toBeVisible();
+  await reader
+    .locator('[data-page="4"]')
+    .evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await expect(reader).toHaveURL(new RegExp(`/read/${publication.slug}/4$`));
+  const media = await guest.request.get(
+    `http://localhost:3100/api/comics/${id}/media/1?v=${publication.version}`,
+  );
+  assert.match(media.headers()["cache-control"], /private, max-age=604800/);
+  const blocked = await guest.request.get(
+    `http://localhost:3100/api/comics/${id}/media/5`,
+  );
+  assert.equal(blocked.status(), 401);
+  assert.match(blocked.headers()["cache-control"], /no-store/);
+  await reader.setViewportSize({ width: 390, height: 844 });
+  assert.equal(
+    await reader.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+    true,
+    "Reader mobile overflow",
+  );
+  await reader.screenshot({ path: "test-results/reader-mobile.png" });
+  await reader.setViewportSize({ width: 1280, height: 900 });
+  await reader.evaluate(() => window.scrollTo(0, 0));
   await reader.screenshot({
     path: "test-results/reader-chapters.png",
     fullPage: true,
   });
+  await chapterSelect.selectOption({ label: "Chapter 2: Homecoming" });
+  await expect(reader).toHaveURL(new RegExp(`/read/${publication.slug}/6$`));
+  await expect(
+    reader.getByText("Page 6 is not part of the free preview."),
+  ).toBeVisible();
   await reader.goto(`http://localhost:3100/read/${publication.slug}/5`);
   assert.equal(
     (await reader.content()).includes("Protectedendingorbit"),

@@ -38,6 +38,7 @@ export interface PublicationRepository {
   ): Promise<boolean>;
   page(comicId: string, number: number): Promise<ComicPage | null>;
   pages(comicId: string): Promise<ComicPage[]>;
+  pageRange(comicId: string, from: number, to: number): Promise<ComicPage[]>;
   reorderPages(id: string, version: number, ids: string[]): Promise<boolean>;
   editPage(
     id: string,

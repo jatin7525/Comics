@@ -2581,3 +2581,22 @@ button:disabled {
   .chapter-list a { grid-template-columns:1fr; gap:2px; }
   .chapter-rows li { grid-template-columns:1fr 1fr; }
 }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.reader-scroller { min-width:0; }
+.reader-toolbar { position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 0; margin-bottom:12px; background:var(--surface); border-bottom:1px solid var(--line); }
+.reader-toolbar .secondary { display:inline-flex; align-items:center; gap:4px; padding:8px 12px; font-size:13px; }
+.reader-toolbar .secondary:disabled { opacity:.45; cursor:not-allowed; }
+.reader-chapter-select { flex:1 1 200px; min-width:0; }
+.reader-chapter-select select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font:inherit; font-size:13px; text-overflow:ellipsis; }
+.reader-position { margin-left:auto; font-size:13px; color:var(--muted); white-space:nowrap; }
+.reader-page-block { margin-bottom:16px; scroll-margin-top:72px; }
+.reader-chapter-divider { font:600 20px "Space Grotesk"; margin:28px 0 14px; padding-top:20px; border-top:1px solid var(--line); overflow-wrap:anywhere; }
+.reader-page-block:first-of-type .reader-chapter-divider { margin-top:0; padding-top:0; border-top:0; }
+.reader-earlier { display:block; margin:0 auto 16px; }
+.reader-status { margin:16px 0; text-align:center; }
+.reader-end { text-align:center; padding:32px 0; }
+.gate h2 { font:600 29px "Space Grotesk"; letter-spacing:-0.8px; }
+@media (max-width:600px) {
+  .reader-toolbar .secondary span { display:none; }
+  .reader-position { width:100%; margin-left:0; text-align:center; }
+}

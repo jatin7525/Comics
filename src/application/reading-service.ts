@@ -5,7 +5,7 @@ import type {
   PublicationRepository,
 } from "./ports";
 import type { User } from "@/domain/models";
-import { readingAccess } from "@/domain/access";
+import { PREVIEW_PAGES, readingAccess } from "@/domain/access";
 import { ensure } from "@/domain/errors";
 
 export class ReadingService {
@@ -30,6 +30,54 @@ export class ReadingService {
     return {
       publication,
       decision: readingAccess(publication, page, user, grants),
+    };
+  }
+  // Returns consecutive readable pages from `from`, stopping at the first page the reader may not
+  // open. Locked pages are never returned, so their story text stays on the server.
+  async pages(id: string, from: number, limit: number, user: User | null) {
+    const publication = await this.publications.find(id);
+    ensure(
+      publication &&
+        publication.status === "published" &&
+        publication.kind === "comic" &&
+        Number.isSafeInteger(from) &&
+        from >= 1 &&
+        from <= publication.pageCount,
+      "NOT_FOUND",
+      "This comic is not available.",
+      404,
+    );
+    const to = Math.min(publication.pageCount, from + limit - 1);
+    const grants =
+      user && to > PREVIEW_PAGES && publication.access !== "free"
+        ? await this.entitlements.forReader(user.id, id)
+        : [];
+    let last = from - 1;
+    let gate: "login_required" | "payment_required" | null = null;
+    for (let page = from; page <= to; page++) {
+      const decision = readingAccess(publication, page, user, grants);
+      if (!decision.allowed) {
+        if (
+          decision.reason === "login_required" ||
+          decision.reason === "payment_required"
+        )
+          gate = decision.reason;
+        break;
+      }
+      last = page;
+    }
+    const pages =
+      last >= from ? await this.publications.pageRange(id, from, last) : [];
+    return {
+      publication,
+      pages: pages.map(({ number, alt, storyText }) => ({
+        number,
+        alt,
+        storyText: storyText ?? "",
+      })),
+      gate,
+      gatePage: gate ? last + 1 : null,
+      nextFrom: !gate && last < publication.pageCount ? last + 1 : null,
     };
   }
   async image(id: string, page: number, user: User | null) {

@@ -97,6 +97,10 @@ export const policySchema = z
 export const progressSchema = z
   .object({ page: z.number().int().min(1) })
   .strict();
+export const pageBatchSchema = z.object({
+  from: z.coerce.number().int().min(1),
+  limit: z.coerce.number().int().min(1).max(10).default(4),
+});
 export const toggleSchema = z.object({ enabled: z.boolean() }).strict();
 
 export const chapterInputSchema = z

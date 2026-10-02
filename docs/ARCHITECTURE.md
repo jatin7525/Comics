@@ -21,7 +21,8 @@ Guest previews and paid access are evaluated independently of presentation. A hi
 - Unique indexes for email, slugs, comic/page numbers, and reader links; compound indexes for catalog and personal history queries.
 - Bounded feeds and dashboards; database query timeouts.
 - Comic bytes live in object storage, not MongoDB documents. Uploads are bounded by bytes/pixels, stripped and converted to WebP; covers and pages use different target widths.
-- Authenticated comic images stream through authorization rather than exposing bucket keys. They currently use `no-store` for reliable revocation.
+- Comic images stream through authorization rather than exposing bucket keys. Successful page images are browser-cacheable (`private, max-age=604800, immutable`) and requested with the publication version in the URL, so a republished comic gets new URLs. `private` keeps them out of CDN and shared caches, and every uncached request is reauthorized. The trade-off: a browser that already downloaded a page can show it from its own cache for up to seven days after the comic is hidden or access is revoked. Published covers are cached for one hour; draft covers, studio previews and all error responses stay `no-store`.
+- The reading screen loads pages in batches of up to 10 (`GET /api/comics/:id/pages`) as the reader scrolls. A batch stops at the first page the reader may not open, so locked story text is never sent.
 
 ## What “a million users” requires
 
