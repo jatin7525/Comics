@@ -113,7 +113,7 @@ export default async function Discover() {
       />
       <ComicGrid comics={catalog.items.map(comicCard)} />
       {!!originals.items.length && (
-        <>
+        <section className="section">
           <SectionHeading
             title={`${name} Originals`}
             description="Stories from our own universe, made in-house."
@@ -121,7 +121,7 @@ export default async function Discover() {
             linkText="All originals"
           />
           <ComicGrid comics={originals.items.map(comicCard)} />
-        </>
+        </section>
       )}
       {policy.adsEnabled && (
         <div className="ad">
