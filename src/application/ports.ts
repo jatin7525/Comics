@@ -41,6 +41,30 @@ export interface PublicationRepository {
   pages(comicId: string): Promise<ComicPage[]>;
   pageRange(comicId: string, from: number, to: number): Promise<ComicPage[]>;
   reorderPages(id: string, version: number, ids: string[]): Promise<boolean>;
+  restructure(
+    id: string,
+    version: number,
+    change: (current: {
+      publication: Publication;
+      pages: ComicPage[];
+    }) => { pages: ComicPage[]; chapters: Chapter[] } | null,
+    audit?: AuditEvent,
+  ): Promise<boolean>;
+  // Returns the replaced image's storage key, or null on conflict.
+  replacePageImage(
+    id: string,
+    version: number,
+    pageId: string,
+    storageKey: string,
+    bytes: number,
+    audit: AuditEvent,
+  ): Promise<string | null>;
+  // Permanently removes the publication and its pages; returns storage keys to delete, or null on conflict.
+  deletePublication(
+    id: string,
+    version: number,
+    audit: AuditEvent,
+  ): Promise<string[] | null>;
   editPage(
     id: string,
     version: number,

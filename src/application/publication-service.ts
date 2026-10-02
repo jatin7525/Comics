@@ -4,7 +4,7 @@ import type {
   ObjectStorage,
   PublicationRepository,
 } from "./ports";
-import type { Publication, User } from "@/domain/models";
+import type { ComicPage, Publication, User } from "@/domain/models";
 import {
   publicationSchema,
   pageTextSchema,
@@ -13,9 +13,62 @@ import {
 } from "@/domain/validation";
 import { ensure } from "@/domain/errors";
 import { canManagePublication } from "@/domain/access";
-import { validChapters } from "@/domain/chapters";
+import { chapterRanges, validChapters } from "@/domain/chapters";
 
-const editable: Publication["status"][] = ["draft", "changes_requested"];
+// Drafts and changes-requested work can be submitted; owners may also change published work immediately.
+const draftStates: Publication["status"][] = ["draft", "changes_requested"];
+const editable: Publication["status"][] = [...draftStates, "published"];
+
+// Inserts a page at the end of the given chapter (or the end of the comic) and shifts later chapters.
+function insertPage(
+  publication: Publication,
+  pages: ComicPage[],
+  chapterId: string | undefined,
+  page: ComicPage,
+) {
+  const chapters = publication.chapters ?? [];
+  const target = chapterId
+    ? chapterRanges(publication).find((chapter) => chapter.id === chapterId)
+    : undefined;
+  if (chapterId && !target) return null;
+  const at = target ? target.endPage : pages.length;
+  return {
+    pages: [...pages.slice(0, at), page, ...pages.slice(at)],
+    chapters: chapters.map((chapter) =>
+      chapter.startPage > at
+        ? { ...chapter, startPage: chapter.startPage + 1 }
+        : chapter,
+    ),
+  };
+}
+// Removes pages and shifts chapter starts; chapters left with no pages are dropped.
+function removePages(
+  publication: Publication,
+  pages: ComicPage[],
+  remove: (page: ComicPage) => boolean,
+) {
+  const kept = pages.filter((page) => !remove(page));
+  if (kept.length === pages.length) return null;
+  const removedBefore = (position: number) =>
+    pages.filter((page) => page.number < position && remove(page)).length;
+  const ranges = chapterRanges(publication);
+  const chapters = ranges
+    .filter((chapter) =>
+      pages.some(
+        (page) =>
+          page.number >= chapter.startPage &&
+          page.number <= chapter.endPage &&
+          !remove(page),
+      ),
+    )
+    .map(({ id, title, startPage }) => ({
+      id,
+      title,
+      startPage: startPage - removedBefore(startPage),
+    }));
+  if (chapters.length) chapters[0] = { ...chapters[0]!, startPage: 1 };
+  return { pages: kept, chapters };
+}
 export class PublicationService {
   constructor(
     private readonly publications: PublicationRepository,
@@ -67,6 +120,33 @@ export class PublicationService {
     );
     return publication;
   }
+  private audit(
+    actor: User,
+    action: string,
+    targetId: string,
+    details: string,
+  ) {
+    return {
+      id: randomUUID(),
+      actorId: actor.id,
+      actorName: actor.name,
+      action,
+      targetId,
+      details,
+      createdAt: new Date(),
+    };
+  }
+  // Changes to a published comic go live immediately, so each one is recorded in the audit log.
+  private liveAudit(
+    actor: User,
+    current: Publication,
+    action: string,
+    details: string,
+  ) {
+    return current.status === "published"
+      ? this.audit(actor, `publication.${action}`, current.id, details)
+      : undefined;
+  }
   async edit(
     actor: User,
     id: string,
@@ -80,8 +160,27 @@ export class PublicationService {
       "KIND_IMMUTABLE",
       "Create a separate publication to change its type.",
     );
+    if (current.status === "published") {
+      ensure(
+        input.rightsConfirmed,
+        "RIGHTS_REQUIRED",
+        "Published work must keep its publishing-rights declaration.",
+      );
+      ensure(
+        !["purchase", "both"].includes(input.access) ||
+          (input.pricePaise ?? 0) > 0,
+        "PRICE_REQUIRED",
+        "Set a purchase price for this access option.",
+      );
+    }
     ensure(
-      await this.publications.update(id, version, editable, input),
+      await this.publications.update(
+        id,
+        version,
+        editable,
+        input,
+        this.liveAudit(actor, current, "edited", input.title),
+      ),
       "CONFLICT",
       "This publication changed or is no longer editable. Reload before saving.",
       409,
@@ -94,6 +193,7 @@ export class PublicationService {
     kind: "cover" | "page",
     data: Uint8Array,
     alt: string,
+    chapterId?: string,
   ) {
     const current = await this.owned(actor, id);
     ensure(
@@ -107,23 +207,34 @@ export class PublicationService {
       "INVALID_UPLOAD",
       "Artwork uses a single cover image.",
     );
+    if (kind === "page") this.noPendingRelease(current);
     const key = `publications/${id}/${kind}/${randomUUID()}.webp`;
     await this.storage.put(key, data, "image/webp");
     let committed = false;
     try {
       committed =
         kind === "cover"
-          ? await this.publications.update(id, version, editable, {
-              coverKey: key,
-            })
-          : await this.publications.addPage(current, {
-              id: randomUUID(),
-              comicId: id,
-              number: current.pageCount + 1,
-              storageKey: key,
-              alt,
-              bytes: data.byteLength,
-            });
+          ? await this.publications.update(
+              id,
+              version,
+              editable,
+              { coverKey: key },
+              this.liveAudit(actor, current, "cover_replaced", alt),
+            )
+          : await this.publications.restructure(
+              id,
+              version,
+              ({ publication, pages }) =>
+                insertPage(publication, pages, chapterId, {
+                  id: randomUUID(),
+                  comicId: id,
+                  number: 0,
+                  storageKey: key,
+                  alt,
+                  bytes: data.byteLength,
+                }),
+              this.liveAudit(actor, current, "page_added", alt),
+            );
       ensure(
         committed,
         "CONFLICT",
@@ -140,6 +251,168 @@ export class PublicationService {
     }
     // Old covers remain for recovery; the cleanup job described in operations removes unreferenced objects.
   }
+  // Page-sequence edits on a published comic wait until a new chapter in preparation is finished or discarded.
+  private noPendingRelease(current: Publication) {
+    ensure(
+      !current.release,
+      "RELEASE_PENDING",
+      "Finish or discard the new chapter you are preparing before changing this comic's pages.",
+      409,
+    );
+  }
+  async replacePage(
+    actor: User,
+    id: string,
+    version: number,
+    pageId: string,
+    data: Uint8Array,
+  ) {
+    const current = await this.owned(actor, id);
+    ensure(
+      current.kind === "comic" &&
+        editable.includes(current.status) &&
+        current.version === version,
+      "CONFLICT",
+      "This publication changed or is awaiting review. Reload before replacing a page.",
+      409,
+    );
+    const key = `publications/${id}/page/${randomUUID()}.webp`;
+    await this.storage.put(key, data, "image/webp");
+    let previous: string | null = null;
+    try {
+      previous = await this.publications.replacePageImage(
+        id,
+        version,
+        pageId,
+        key,
+        data.byteLength,
+        this.audit(actor, "publication.page_replaced", id, pageId),
+      );
+      ensure(
+        previous,
+        "CONFLICT",
+        "This page changed or no longer exists. Reload and try again.",
+        409,
+      );
+    } finally {
+      await this.storage
+        .delete(previous ?? key)
+        .catch(() =>
+          console.error("storage_cleanup_failed", { publicationId: id }),
+        );
+    }
+  }
+  async removePage(actor: User, id: string, version: number, pageId: string) {
+    const current = await this.owned(actor, id);
+    ensure(current.kind === "comic", "INVALID_KIND", "Only comics have pages.");
+    this.noPendingRelease(current);
+    const page = (await this.publications.pages(id)).find(
+      (item) => item.id === pageId,
+    );
+    ensure(page, "NOT_FOUND", "Page not found.", 404);
+    ensure(
+      current.status !== "published" || current.pageCount > 1,
+      "LAST_PAGE",
+      "A published comic needs at least one page. Delete the comic instead.",
+    );
+    ensure(
+      await this.publications.restructure(
+        id,
+        version,
+        ({ publication, pages }) =>
+          removePages(publication, pages, (item) => item.id === pageId),
+        this.liveAudit(actor, current, "page_removed", `page ${page.number}`),
+      ),
+      "CONFLICT",
+      "This comic changed. Reload before removing the page.",
+      409,
+    );
+    await this.storage
+      .delete(page.storageKey)
+      .catch(() =>
+        console.error("storage_cleanup_failed", { publicationId: id }),
+      );
+  }
+  async deleteChapter(
+    actor: User,
+    id: string,
+    version: number,
+    chapterId: string,
+  ) {
+    const current = await this.owned(actor, id);
+    this.noPendingRelease(current);
+    const ranges = chapterRanges(current);
+    const chapter = ranges.find((item) => item.id === chapterId);
+    ensure(chapter, "NOT_FOUND", "Chapter not found.", 404);
+    ensure(
+      ranges.length > 1,
+      "LAST_CHAPTER",
+      "This is the only chapter. Delete the comic instead.",
+    );
+    const doomed = (await this.publications.pages(id)).filter(
+      (page) =>
+        page.number >= chapter.startPage && page.number <= chapter.endPage,
+    );
+    const doomedIds = new Set(doomed.map((page) => page.id));
+    ensure(
+      await this.publications.restructure(
+        id,
+        version,
+        ({ publication, pages }) => {
+          const result = removePages(publication, pages, (page) =>
+            doomedIds.has(page.id),
+          );
+          return (
+            result && {
+              ...result,
+              chapters: result.chapters.filter((item) => item.id !== chapterId),
+            }
+          );
+        },
+        this.liveAudit(actor, current, "chapter_deleted", chapter.title),
+      ),
+      "CONFLICT",
+      "This comic changed. Reload before deleting the chapter.",
+      409,
+    );
+    await Promise.all(
+      doomed.map((page) =>
+        this.storage
+          .delete(page.storageKey)
+          .catch(() =>
+            console.error("storage_cleanup_failed", { publicationId: id }),
+          ),
+      ),
+    );
+  }
+  async deleteComic(actor: User, id: string, version: number) {
+    const current = await this.owned(actor, id);
+    const keys = await this.publications.deletePublication(
+      id,
+      version,
+      this.audit(
+        actor,
+        "publication.deleted",
+        id,
+        `${current.title} (${current.status})`,
+      ),
+    );
+    ensure(
+      keys,
+      "CONFLICT",
+      "This publication changed. Reload before deleting it.",
+      409,
+    );
+    await Promise.all(
+      keys.map((key) =>
+        this.storage
+          .delete(key)
+          .catch(() =>
+            console.error("storage_cleanup_failed", { publicationId: id }),
+          ),
+      ),
+    );
+  }
   async reorder(actor: User, id: string, version: number, ids: string[]) {
     const current = await this.owned(actor, id);
     ensure(
@@ -147,6 +420,7 @@ export class PublicationService {
       "INVALID_KIND",
       "Only comics have ordered pages.",
     );
+    this.noPendingRelease(current);
     ensure(
       await this.publications.reorderPages(id, version, ids),
       "CONFLICT",
@@ -201,7 +475,18 @@ export class PublicationService {
     );
     // The version check also pins pageCount, so the boundaries were validated against the stored pages.
     ensure(
-      await this.publications.update(id, version, editable, { chapters }),
+      await this.publications.update(
+        id,
+        version,
+        editable,
+        { chapters },
+        this.liveAudit(
+          actor,
+          current,
+          "chapters_updated",
+          chapters.map((chapter) => chapter.title).join("; "),
+        ),
+      ),
       "CONFLICT",
       "This publication changed. Reload before saving chapters.",
       409,
@@ -392,7 +677,7 @@ export class PublicationService {
       "Fix the chapter boundaries before submitting.",
     );
     ensure(
-      await this.publications.update(id, version, editable, {
+      await this.publications.update(id, version, draftStates, {
         status: "submitted",
         feedback: null,
       }),

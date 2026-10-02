@@ -36,7 +36,13 @@ export function PublicationMedia({
     (page) => page.number <= publication.pageCount,
   );
   const page = pages.find((page) => page.id === selected) ?? pages[0];
-  const editable = ["draft", "changes_requested"].includes(publication.status);
+  const editable = ["draft", "changes_requested", "published"].includes(
+    publication.status,
+  );
+  const live = publication.status === "published";
+  // While a new chapter is being prepared, the published page sequence stays fixed.
+  const canChangePages = editable && !(live && publication.release);
+  const [target, setTarget] = useState("");
   const chapters = publication.chapters ?? [];
   const chapterStarts = new Map(
     chapters.map((chapter, index) => [chapter.startPage, index + 1]),
@@ -111,6 +117,8 @@ export function PublicationMedia({
           form.set("file", item.file);
           form.set("kind", item.kind);
           form.set("version", String(version));
+          if (item.kind === "page" && target && newChapter === null)
+            form.set("chapterId", target);
           form.set(
             "alt",
             `${publication.kind === "artwork" ? "Artwork" : item.kind === "cover" ? "Comic cover" : "Comic page"}: ${item.file.name}`.slice(
@@ -201,7 +209,13 @@ export function PublicationMedia({
       </div>
       {publication.kind === "comic" && (
         <>
-          {editable && (
+          {live && publication.release && (
+            <div className="notice" role="status">
+              Page changes are paused while your new chapter is being prepared.
+              Finish or discard it below to add, move, replace or remove pages.
+            </div>
+          )}
+          {canChangePages && (
             <label className="field">
               Select comic pages
               <input
@@ -216,21 +230,43 @@ export function PublicationMedia({
           {!!files.length && (
             <>
               <h3>Ready to upload · {files.length} pages</h3>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={newChapter !== null}
-                  disabled={busy}
-                  onChange={(e) =>
-                    setNewChapter(
-                      e.target.checked
-                        ? `Chapter ${(chapters.length || (pages.length ? 1 : 0)) + 1}`
-                        : null,
-                    )
-                  }
-                />
-                Start a new chapter with these pages
-              </label>
+              {!!chapters.length && newChapter === null && (
+                <label className="field">
+                  Add these pages to
+                  <select
+                    value={target}
+                    disabled={busy}
+                    onChange={(e) => setTarget(e.target.value)}
+                  >
+                    <option value="">
+                      The end of the comic (
+                      {chapters.at(-1)?.title ?? "last chapter"})
+                    </option>
+                    {chapters.slice(0, -1).map((chapter, index) => (
+                      <option key={chapter.id} value={chapter.id}>
+                        The end of chapter {index + 1}: {chapter.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {!live && (
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={newChapter !== null}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setNewChapter(
+                        e.target.checked
+                          ? `Chapter ${(chapters.length || (pages.length ? 1 : 0)) + 1}`
+                          : null,
+                      )
+                    }
+                  />
+                  Start a new chapter with these pages
+                </label>
+              )}
               {newChapter !== null && (
                 <label className="field">
                   New chapter title
@@ -350,7 +386,7 @@ export function PublicationMedia({
                       aria-label={`Move saved page ${item.number} ${direction < 0 ? "earlier" : "later"}`}
                       disabled={
                         busy ||
-                        !editable ||
+                        !canChangePages ||
                         index + direction < 0 ||
                         index + direction >= pages.length
                       }
@@ -372,6 +408,77 @@ export function PublicationMedia({
                       {direction < 0 ? "← Earlier" : "Later →"}
                     </button>
                   ))}
+                  {canChangePages && (
+                    <>
+                      <label
+                        className={`secondary replace-label ${busy ? "is-disabled" : ""}`}
+                      >
+                        Replace image
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={busy}
+                          aria-label={`Replace image for page ${item.number}`}
+                          onChange={(e) => {
+                            const file = e.currentTarget.files?.[0];
+                            e.currentTarget.value = "";
+                            if (!file) return;
+                            void run(async () => {
+                              if (
+                                ![
+                                  "image/jpeg",
+                                  "image/png",
+                                  "image/webp",
+                                ].includes(file.type) ||
+                                file.size > 10 * 1024 * 1024
+                              )
+                                throw new Error(
+                                  "Choose a JPEG, PNG or WebP image up to 10 MB.",
+                                );
+                              const form = new FormData();
+                              form.set("file", file);
+                              form.set("version", String(publication.version));
+                              const response = await fetch(
+                                `/api/publications/${publication.id}/pages/${item.id}/replace`,
+                                { method: "POST", body: form },
+                              );
+                              const data = await response.json();
+                              if (!response.ok)
+                                throw new Error(
+                                  data.error?.message ??
+                                    "Could not replace the page.",
+                                );
+                              await reload();
+                            });
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy || (live && pages.length <= 1)}
+                        aria-label={`Remove page ${item.number}`}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `Permanently remove page ${item.number}? This cannot be undone.`,
+                            )
+                          )
+                            return;
+                          void run(async () => {
+                            await requestJson(
+                              `/api/publications/${publication.id}/pages/${item.id}`,
+                              { version: publication.version },
+                              "DELETE",
+                            );
+                            await reload();
+                          });
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </>
+                  )}
                 </div>
               </figure>
             ))}
@@ -398,6 +505,19 @@ export function PublicationMedia({
               await saveChapters(publication.version, next);
               await reload();
             })
+          }
+          onDelete={
+            canChangePages
+              ? (chapterId) =>
+                  run(async () => {
+                    await requestJson(
+                      `/api/publications/${publication.id}/chapters/${chapterId}`,
+                      { version: publication.version },
+                      "DELETE",
+                    );
+                    await reload();
+                  })
+              : undefined
           }
         />
       )}

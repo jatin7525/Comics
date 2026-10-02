@@ -124,7 +124,9 @@ export function ComicCard({ comic }: { comic: ComicCardData }) {
         <img
           loading="lazy"
           src={
-            comic.hasCover ? `/api/comics/${comic.id}/cover` : "/art/neon.svg"
+            comic.hasCover
+              ? `/api/comics/${comic.id}/cover?v=${comic.version}`
+              : "/art/neon.svg"
           }
           alt={`Cover of ${comic.title}`}
           width={900}

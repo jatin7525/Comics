@@ -20,6 +20,8 @@ export function comicCard(publication: Publication) {
     tags: publication.tags ?? [],
     pricePaise: publication.pricePaise ?? null,
     hasCover: !!publication.coverKey,
+    // Lets cover URLs change whenever the publication does, so cached covers never go stale.
+    version: publication.version,
   };
 }
 export type ComicCardData = ReturnType<typeof comicCard>;

@@ -32,7 +32,7 @@ export default async function Discover() {
         <section className="hero">
           <img
             className="hero-art"
-            src={`/api/comics/${featured.id}/cover`}
+            src={`/api/comics/${featured.id}/cover?v=${featured.version}`}
             alt={`World of ${featured.title}`}
             fetchPriority="high"
           />
@@ -81,7 +81,10 @@ export default async function Discover() {
                 key={publication.id}
                 href={`/read/${publication.slug}/${page ?? 1}`}
               >
-                <img src={`/api/comics/${publication.id}/cover`} alt="" />
+                <img
+                  src={`/api/comics/${publication.id}/cover?v=${publication.version}`}
+                  alt=""
+                />
                 <div>
                   <strong>{publication.title}</strong>
                   <p>
@@ -110,7 +113,7 @@ export default async function Discover() {
       />
       <ComicGrid comics={catalog.items.map(comicCard)} />
       {!!originals.items.length && (
-        <>
+        <section className="section">
           <SectionHeading
             title={`${name} Originals`}
             description="Stories from our own universe, made in-house."
@@ -118,7 +121,7 @@ export default async function Discover() {
             linkText="All originals"
           />
           <ComicGrid comics={originals.items.map(comicCard)} />
-        </>
+        </section>
       )}
       {policy.adsEnabled && (
         <div className="ad">

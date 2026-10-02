@@ -46,7 +46,7 @@ export default async function Review({
           {publication.coverKey && (
             <img
               className="editor-cover"
-              src={`/api/comics/${id}/cover`}
+              src={`/api/comics/${id}/cover?v=${publication.version}`}
               alt="Submission cover"
             />
           )}

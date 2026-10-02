@@ -537,14 +537,10 @@ describe("persistent publishing workflow", { concurrency: false }, () => {
     assert.deepEqual(current.chapters?.at(-1)?.title, "Return");
     assert.equal(current.chapters?.at(-1)?.startPage, startPages + 1);
     assert.equal(
-      await (
-        await database()
-      )
-        .collection("audit")
-        .countDocuments({
-          targetId: created.id,
-          action: "chapter_release.approved",
-        }),
+      await (await database()).collection("audit").countDocuments({
+        targetId: created.id,
+        action: "chapter_release.approved",
+      }),
       1,
     );
     // Discarding an unfinished chapter deletes its pages and stored images.
@@ -647,6 +643,198 @@ describe("persistent publishing workflow", { concurrency: false }, () => {
       0,
     );
     await assert.rejects(reading.image(created.id, 1, null), /not available/);
+  });
+});
+
+describe("managing published comics", { concurrency: false }, () => {
+  let comic: Publication;
+  const fresh = async () => (await publications.find(comic.id))!;
+  const ordered = async () =>
+    (await publications.pages(comic.id)).map((page) => page.alt);
+  it("publishes a two-chapter comic to manage", async () => {
+    comic = await publishing.create(author, {
+      ...input,
+      title: "A comic to manage",
+      access: "free",
+    });
+    await publishing.upload(
+      author,
+      comic.id,
+      1,
+      "cover",
+      image,
+      "Managed cover art.",
+    );
+    for (let page = 1; page <= 6; page++)
+      await publishing.upload(
+        author,
+        comic.id,
+        (await fresh()).version,
+        "page",
+        image,
+        `Managed page ${page}.`,
+      );
+    const pages = await publications.pages(comic.id);
+    await publishing.setChapters(author, comic.id, (await fresh()).version, [
+      { title: "Alpha", startPage: 1 },
+      { title: "Beta", startPage: 4 },
+    ]);
+    await publishing.submit(author, comic.id, (await fresh()).version);
+    await admin.review(moderator, comic.id, {
+      version: (await fresh()).version,
+      decision: "published",
+      note: "",
+    });
+    assert.equal((await fresh()).status, "published");
+    assert.equal(pages.length, 6);
+  });
+  it("applies detail and chapter edits immediately with an audit trail", async () => {
+    await assert.rejects(
+      publishing.edit(author, comic.id, (await fresh()).version, {
+        ...input,
+        access: "free",
+        title: "No rights",
+        rightsConfirmed: false,
+      }),
+      /rights/,
+    );
+    await publishing.edit(author, comic.id, (await fresh()).version, {
+      ...input,
+      access: "free",
+      title: "A managed comic, renamed",
+    });
+    const current = await fresh();
+    assert.equal(current.title, "A managed comic, renamed");
+    assert.equal(current.status, "published");
+    await publishing.setChapters(author, comic.id, current.version, [
+      { id: current.chapters![0]!.id, title: "Alpha (revised)", startPage: 1 },
+      { id: current.chapters![1]!.id, title: "Beta", startPage: 4 },
+    ]);
+    assert.equal((await fresh()).chapters?.[0]?.title, "Alpha (revised)");
+    await assert.rejects(
+      publishing.submit(author, comic.id, (await fresh()).version),
+      /changed/,
+    );
+    const db = await database();
+    assert.equal(
+      await db.collection("audit").countDocuments({
+        targetId: comic.id,
+        action: { $in: ["publication.edited", "publication.chapters_updated"] },
+      }),
+      2,
+    );
+  });
+  it("inserts, replaces, reorders and removes pages while shifting chapters", async () => {
+    await publishing.upload(
+      author,
+      comic.id,
+      (await fresh()).version,
+      "page",
+      image,
+      "Inserted into Alpha.",
+      (await fresh()).chapters![0]!.id,
+    );
+    let current = await fresh();
+    assert.equal(current.pageCount, 7);
+    assert.equal((await ordered())[3], "Inserted into Alpha.");
+    assert.deepEqual(
+      current.chapters?.map((chapter) => chapter.startPage),
+      [1, 5],
+    );
+    const first = (await publications.page(comic.id, 1))!;
+    await publishing.replacePage(
+      author,
+      comic.id,
+      current.version,
+      first.id,
+      image,
+    );
+    const replaced = (await publications.page(comic.id, 1))!;
+    assert.notEqual(replaced.storageKey, first.storageKey);
+    assert.equal(await storage.get(first.storageKey), null);
+    current = await fresh();
+    const ids = (await publications.pages(comic.id)).map((page) => page.id);
+    await publishing.reorder(author, comic.id, current.version, [
+      ids[1]!,
+      ids[0]!,
+      ...ids.slice(2),
+    ]);
+    assert.equal((await publications.page(comic.id, 2))?.id, ids[0]);
+    current = await fresh();
+    const removed = (await publications.page(comic.id, 2))!;
+    await publishing.removePage(author, comic.id, current.version, removed.id);
+    current = await fresh();
+    assert.equal(current.pageCount, 6);
+    assert.deepEqual(
+      current.chapters?.map((chapter) => chapter.startPage),
+      [1, 4],
+    );
+    assert.equal(await storage.get(removed.storageKey), null);
+    await assert.rejects(
+      publishing.removePage(other, comic.id, current.version, ids[2]!),
+      /not found/,
+    );
+  });
+  it("blocks page-sequence edits while a new chapter is being prepared", async () => {
+    await publishing.startRelease(
+      author,
+      comic.id,
+      (await fresh()).version,
+      "Gamma",
+    );
+    const current = await fresh();
+    const page = (await publications.page(comic.id, 1))!;
+    await assert.rejects(
+      publishing.removePage(author, comic.id, current.version, page.id),
+      /Finish or discard/,
+    );
+    await publishing.discardRelease(author, comic.id, current.version);
+  });
+  it("permanently deletes a chapter, then the whole comic", async () => {
+    let current = await fresh();
+    const beta = current.chapters![1]!;
+    const betaPages = (await publications.pages(comic.id)).filter(
+      (page) => page.number >= beta.startPage,
+    );
+    await publishing.deleteChapter(author, comic.id, current.version, beta.id);
+    current = await fresh();
+    assert.equal(current.pageCount, beta.startPage - 1);
+    assert.deepEqual(
+      current.chapters?.map((chapter) => chapter.title),
+      ["Alpha (revised)"],
+    );
+    for (const page of betaPages)
+      assert.equal(await storage.get(page.storageKey), null);
+    await assert.rejects(
+      publishing.deleteChapter(
+        author,
+        comic.id,
+        current.version,
+        current.chapters![0]!.id,
+      ),
+      /only chapter/,
+    );
+    await community.save(other.id, comic.id, true);
+    const remaining = await publications.pages(comic.id);
+    await assert.rejects(
+      publishing.deleteComic(other, comic.id, current.version),
+      /not found/,
+    );
+    await publishing.deleteComic(author, comic.id, current.version);
+    assert.equal(await publications.find(comic.id), null);
+    assert.equal((await publications.pages(comic.id)).length, 0);
+    assert.equal(await community.isSaved(other.id, comic.id), false);
+    for (const page of remaining)
+      assert.equal(await storage.get(page.storageKey), null);
+    assert.equal(await storage.get(current.coverKey!), null);
+    assert.equal(
+      await (
+        await database()
+      )
+        .collection("audit")
+        .countDocuments({ targetId: comic.id, action: "publication.deleted" }),
+      1,
+    );
   });
 });
 

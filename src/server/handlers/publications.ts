@@ -91,6 +91,8 @@ export const upload = api(
     const version = z.coerce.number().int().min(1).parse(form.get("version"));
     const alt = z.string().trim().min(10).max(1000).parse(form.get("alt"));
     const file = form.get("file");
+    const chapter = form.get("chapterId");
+    const chapterId = chapter ? idSchema.parse(chapter) : undefined;
     const processed = await processImage(file, kind === "cover" ? 1000 : 1800);
     await getServices().publishing.upload(
       actor(context),
@@ -99,6 +101,7 @@ export const upload = api(
       kind,
       processed,
       alt,
+      chapterId,
     );
     return NextResponse.json(
       { ok: true, version: version + 1 },
@@ -233,6 +236,62 @@ export const setChapters = api(
   { roles: ["author", "admin"] },
 );
 
+export const deleteComic = api(
+  async (context) => {
+    const input = await jsonInput(context.request, versionSchema);
+    await getServices().publishing.deleteComic(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+    );
+    return NextResponse.json({ ok: true });
+  },
+  { roles: ["author", "admin"] },
+);
+export const removePage = api(
+  async (context) => {
+    const input = await jsonInput(context.request, versionSchema);
+    await getServices().publishing.removePage(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+      idSchema.parse(context.params.pageId),
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
+export const replacePage = api(
+  async (context) => {
+    const id = idSchema.parse(context.params.id);
+    await getServices().publishing.owned(actor(context), id);
+    const form = await imageForm(context.request);
+    const version = z.coerce.number().int().min(1).parse(form.get("version"));
+    const processed = await processImage(form.get("file"), 1800);
+    await getServices().publishing.replacePage(
+      actor(context),
+      id,
+      version,
+      idSchema.parse(context.params.pageId),
+      processed,
+    );
+    return NextResponse.json({ ok: true, version: version + 1 });
+  },
+  { roles: ["author", "admin"], limit: 120 },
+);
+export const deleteChapter = api(
+  async (context) => {
+    const input = await jsonInput(context.request, versionSchema);
+    await getServices().publishing.deleteChapter(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+      idSchema.parse(context.params.chapterId),
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
 export const startRelease = api(
   async (context) => {
     const input = await jsonInput(context.request, releaseTitleSchema);

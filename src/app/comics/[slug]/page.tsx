@@ -38,7 +38,9 @@ export async function generateMetadata({
       title: publication.title,
       description: publication.synopsis.slice(0, 160),
       url,
-      images: [`${serviceOrigins().reader}/api/comics/${publication.id}/cover`],
+      images: [
+        `${serviceOrigins().reader}/api/comics/${publication.id}/cover?v=${publication.version}`,
+      ],
     },
   };
 }
@@ -76,7 +78,7 @@ export default async function ComicDetails({
       <section className="detail-layout">
         <div className="detail-cover">
           <img
-            src={`/api/comics/${publication.id}/cover`}
+            src={`/api/comics/${publication.id}/cover?v=${publication.version}`}
             alt={publication.title}
           />
           <span>

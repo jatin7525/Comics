@@ -19,9 +19,13 @@ Mutation requests require the exact configured `Origin` and JSON content type, e
 | POST /api/creators/:id/follow | `{ enabled }`; authenticated |
 | POST /api/publications | Publication input; author/admin |
 | PATCH /api/publications/:id | `{ version, publication }`; owner/admin, editable state |
-| POST /api/publications/:id/upload | Multipart `kind` (cover/page), `version`, `alt`, `file` |
+| POST /api/publications/:id/upload | Multipart `kind` (cover/page), `version`, `alt`, `file`, optional `chapterId` (insert at the end of that chapter) |
 | PUT /api/publications/:id/chapters | `{ version, chapters: [{ id?, title, startPage }] }`; owner/admin, editable comic |
-| POST /api/publications/:id/submit | `{ version }`; complete assets + rights |
+| POST /api/publications/:id/submit | `{ version }`; complete assets + rights (drafts only) |
+| DELETE /api/publications/:id | `{ version }`; permanently delete the publication, its pages, images and reader links |
+| DELETE /api/publications/:id/pages/:pageId | `{ version }`; permanently remove a page; chapters shift |
+| POST /api/publications/:id/pages/:pageId/replace | Multipart `version`, `file`; replace a page image |
+| DELETE /api/publications/:id/chapters/:chapterId | `{ version }`; permanently delete a chapter and its pages |
 | GET /api/studio/:id/media/:page | Owner/admin preview, including unpublished pages |
 | POST /api/publications/:id/release | `{ version, title }`; start a new chapter on a published comic (owner/admin) |
 | PATCH /api/publications/:id/release | `{ version, title }`; rename the unfinished chapter |

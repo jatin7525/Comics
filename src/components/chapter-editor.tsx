@@ -11,11 +11,14 @@ export function ChapterEditor({
   busy,
   editable,
   onSave,
+  onDelete,
 }: {
   publication: EditorData;
   busy: boolean;
   editable: boolean;
   onSave: (chapters: ChapterDraft[]) => Promise<void>;
+  // Permanently deletes a saved chapter and its pages; omitted when page changes are paused.
+  onDelete?: (chapterId: string) => Promise<void>;
 }) {
   const pageCount = publication.pageCount;
   const [rows, setRows] = useState<Row[]>(() =>
@@ -89,7 +92,8 @@ export function ChapterEditor({
           <p className="muted">
             Each chapter starts at a page and runs until the next chapter
             begins. Reordering pages keeps chapter starts at the same page
-            numbers.
+            numbers. “Remove” merges a chapter into the previous one; “Delete
+            chapter and pages” erases its pages permanently.
           </p>
           <ol className="chapter-rows">
             {rows.map((row, index) => {
@@ -145,6 +149,27 @@ export function ChapterEditor({
                       Remove
                     </button>
                   )}
+                  {editable &&
+                    onDelete &&
+                    row.id &&
+                    (publication.chapters?.length ?? 0) > 1 && (
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={busy}
+                        aria-label={`Delete chapter ${index + 1} and its pages`}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Permanently delete "${row.title}" and all of its pages? This cannot be undone.`,
+                            )
+                          )
+                            void onDelete(row.id!);
+                        }}
+                      >
+                        Delete chapter and pages
+                      </button>
+                    )}
                 </li>
               );
             })}

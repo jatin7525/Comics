@@ -26,6 +26,20 @@ Chapters in a draft are reviewed with the whole publication.
 
 Authors add chapters to a published comic from Studio's Pages step ("Add a new chapter"): name the chapter, upload its pages in reading order, then submit it. Readers keep reading the published chapters meanwhile. New pages are stored after the public page count, so every reader route, image request and scroll batch treats them as nonexistent until approval. Admin lists submitted chapters on the dashboard; the review page shows the new pages separately and offers approve or request changes (with feedback). Approval atomically adds the pages to the comic, appends the chapter (a comic that had no chapters gets its earlier pages as "Chapter 1"), clears the release and records an audit event. Authors can rename or discard an unfinished chapter; discarding deletes its pages and images. One chapter can be in preparation at a time. Pages of a new chapter cannot yet be reordered or given story text before approval.
 
+### Managing published comics
+
+Owners (and administrators) can change a published comic from Studio, and every change is live immediately, without editorial review:
+
+- Edit details: title, synopsis, genre, tags, age rating, access and price (the rights declaration must stay confirmed, and paid access needs a price), and replace the cover.
+- Rename chapters and move chapter boundaries.
+- Add pages to the end of any chapter (later chapters shift automatically), replace a page's image, reorder pages, edit page text, and remove pages (a published comic keeps at least one page).
+- **Delete a chapter and its pages** permanently. Later chapters shift up; the last remaining chapter cannot be deleted (delete the comic instead).
+- **Delete the whole comic** permanently from the Review step by typing its title. This removes every page and image (including an unfinished new chapter), the cover, and readers' saved entries and reading progress.
+
+Each change to a published comic and each deletion is recorded in the audit log. While a new chapter is being prepared for review, page-sequence edits (add, move, remove, delete chapter) are paused so the pending pages stay aligned; details, cover, page text, chapter names and page replacement still work. Readers fetch images by publication version, so an edit changes image and cover URLs immediately. A browser that already downloaded a deleted page may keep showing it from its own cache for up to seven days.
+
+Because these edits skip review, adding pages to an existing chapter is not reviewed even though starting a brand-new chapter is. Use the audit log to monitor live changes.
+
 ## Originals and site name
 
 Publications created by administrator accounts are the platform's own **Originals** (set on the server; authors cannot set it). They carry an Originals badge, appear on `/originals` and in an Originals section on the home page, and their administrator creator may approve them in Admin, because they are the platform's own publications. Independent work still needs a different administrator to review it. Run the "Backfill comic chapters" workflow with task `originals` (or `npm run db:originals`) to mark works administrators uploaded before this change.
