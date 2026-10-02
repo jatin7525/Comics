@@ -67,6 +67,70 @@ export function ReviewForm({
     </form>
   );
 }
+export function ReleaseReviewForm({
+  id,
+  version,
+  reviewable,
+}: {
+  id: string;
+  version: number;
+  reviewable: boolean;
+}) {
+  const action = useMutation();
+  return (
+    <form
+      className="panel"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        void action.run(async () => {
+          await requestJson(`/api/admin/releases/${id}`, {
+            version,
+            decision: form.get("decision"),
+            note: form.get("note"),
+          });
+        }, "Chapter decision saved.");
+      }}
+    >
+      <h2>New chapter decision</h2>
+      <fieldset disabled={!reviewable || action.pending}>
+        <label className="field">
+          Decision
+          <select name="decision">
+            <option value="approved">Approve and publish chapter</option>
+            <option value="changes_requested">Request changes</option>
+          </select>
+        </label>
+        <label className="field">
+          Editorial feedback
+          <textarea
+            name="note"
+            maxLength={1000}
+            placeholder="Required when requesting changes."
+          />
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" required />I have reviewed every new page
+          against the comic’s age rating and community guidelines.
+        </label>
+        <button className="primary" disabled={action.pending}>
+          {action.pending ? "Saving…" : "Save decision"}
+        </button>
+      </fieldset>
+      {!reviewable && (
+        <p className="muted">
+          This chapter is no longer awaiting review, or you are its author.
+        </p>
+      )}
+      <p role="alert" className="form-error">
+        {action.error}
+      </p>
+      <p role="status" className="form-success">
+        {action.success}
+      </p>
+    </form>
+  );
+}
 export function HideForm({ id, version }: { id: string; version: number }) {
   const action = useMutation();
   return (
@@ -168,9 +232,11 @@ export function UserAccessForm({
 export function PolicyForm({
   adsEnabled,
   submissionsEnabled,
+  siteName,
 }: {
   adsEnabled: boolean;
   submissionsEnabled: boolean;
+  siteName: string;
 }) {
   const action = useMutation();
   return (
@@ -185,6 +251,7 @@ export function PolicyForm({
             {
               adsEnabled: form.get("adsEnabled") === "on",
               submissionsEnabled: form.get("submissionsEnabled") === "on",
+              siteName: String(form.get("siteName") ?? "").trim(),
             },
             "PATCH",
           );
@@ -192,6 +259,20 @@ export function PolicyForm({
       }}
     >
       <h2>Platform controls</h2>
+      <label className="field">
+        Site name
+        <input
+          name="siteName"
+          required
+          minLength={2}
+          maxLength={40}
+          defaultValue={siteName}
+        />
+      </label>
+      <p className="muted">
+        Shown in the logo, page titles, footer and the Originals label across
+        Reader, Studio and Admin.
+      </p>
       <label className="policy-row">
         <div>
           <strong>Accept new submissions</strong>

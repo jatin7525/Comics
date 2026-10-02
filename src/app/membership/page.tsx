@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BillingNotice, Intro } from "@/components/ui";
-export default function Membership() {
+import { siteName } from "@/server/brand";
+export default async function Membership() {
+  const name = await siteName();
   return (
     <>
       <Intro
@@ -26,7 +28,7 @@ export default function Membership() {
         </article>
         <article className="plan featured">
           <span className="tag">Coming later</span>
-          <h2>Astra Plus</h2>
+          <h2>{name} Plus</h2>
           <p>For the endlessly curious.</p>
           <div className="price">Membership</div>
           <ul>

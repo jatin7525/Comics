@@ -14,10 +14,24 @@ import {
   pageTextSchema,
   chaptersSchema,
   pageBatchSchema,
+  releaseTitleSchema,
 } from "@/domain/validation";
 import { ensure } from "@/domain/errors";
 import { canManagePublication } from "@/domain/access";
 
+async function imageForm(request: Request) {
+  const type = request.headers.get("Content-Type");
+  ensure(
+    typeof type === "string" && type.startsWith("multipart/form-data"),
+    "CONTENT_TYPE",
+    "Upload a multipart image.",
+    415,
+  );
+  const bytes = await boundedBody(request, 11 * 1024 * 1024);
+  return new Response(Buffer.from(bytes), {
+    headers: { "Content-Type": type },
+  }).formData();
+}
 const PAGE_CACHE_SECONDS = 7 * 24 * 60 * 60;
 const COVER_CACHE_SECONDS = 60 * 60;
 export const catalog = api(async ({ request }) => {
@@ -72,17 +86,7 @@ export const upload = api(
   async (context) => {
     const id = idSchema.parse(context.params.id);
     await getServices().publishing.owned(actor(context), id);
-    const type = context.request.headers.get("Content-Type");
-    ensure(
-      typeof type === "string" && type.startsWith("multipart/form-data"),
-      "CONTENT_TYPE",
-      "Upload a multipart image.",
-      415,
-    );
-    const bytes = await boundedBody(context.request, 11 * 1024 * 1024);
-    const form = await new Response(Buffer.from(bytes), {
-      headers: { "Content-Type": type },
-    }).formData();
+    const form = await imageForm(context.request);
     const kind = z.enum(["cover", "page"]).parse(form.get("kind"));
     const version = z.coerce.number().int().min(1).parse(form.get("version"));
     const alt = z.string().trim().min(10).max(1000).parse(form.get("alt"));
@@ -227,6 +231,82 @@ export const setChapters = api(
     return NextResponse.json({ ok: true, version: input.version + 1 });
   },
   { roles: ["author", "admin"] },
+);
+
+export const startRelease = api(
+  async (context) => {
+    const input = await jsonInput(context.request, releaseTitleSchema);
+    await getServices().publishing.startRelease(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+      input.title,
+    );
+    return NextResponse.json(
+      { ok: true, version: input.version + 1 },
+      { status: 201 },
+    );
+  },
+  { roles: ["author", "admin"] },
+);
+export const renameRelease = api(
+  async (context) => {
+    const input = await jsonInput(context.request, releaseTitleSchema);
+    await getServices().publishing.renameRelease(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+      input.title,
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
+export const discardRelease = api(
+  async (context) => {
+    const input = await jsonInput(context.request, versionSchema);
+    await getServices().publishing.discardRelease(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
+export const submitRelease = api(
+  async (context) => {
+    const input = await jsonInput(context.request, versionSchema);
+    await getServices().publishing.submitRelease(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
+export const uploadReleasePage = api(
+  async (context) => {
+    const id = idSchema.parse(context.params.id);
+    await getServices().publishing.owned(actor(context), id);
+    const form = await imageForm(context.request);
+    const version = z.coerce.number().int().min(1).parse(form.get("version"));
+    const alt = z.string().trim().min(10).max(1000).parse(form.get("alt"));
+    const processed = await processImage(form.get("file"), 1800);
+    await getServices().publishing.uploadReleasePage(
+      actor(context),
+      id,
+      version,
+      processed,
+      alt,
+    );
+    return NextResponse.json(
+      { ok: true, version: version + 1 },
+      { status: 201 },
+    );
+  },
+  { roles: ["author", "admin"], limit: 120 },
 );
 
 export const editor = api(

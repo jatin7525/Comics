@@ -3,17 +3,21 @@ import { requireUser } from "@/server/session";
 import { getServices } from "@/server/services";
 import { serviceOrigins } from "@/server/service";
 import { Intro } from "@/components/ui";
+import { siteName } from "@/server/brand";
 import {
   ApplicationEditor,
   StartApplication,
 } from "@/components/author-application";
 export default async function BecomeAuthor() {
   const user = await requireUser();
-  const application = await getServices().applications.mine(user.id);
+  const [application, name] = await Promise.all([
+    getServices().applications.mine(user.id),
+    siteName(),
+  ]);
   return (
     <>
       <Intro
-        title="Bring your stories to Astra."
+        title={`Bring your stories to ${name}.`}
         description="Apply for Author Studio with a short comic or original artwork. Our editorial team reviews every application."
       />
       {user.role !== "reader" ? (

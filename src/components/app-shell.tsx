@@ -32,11 +32,13 @@ import {
 import type { ReactNode } from "react";
 import type { ServiceId } from "@/domain/service";
 import type { Role } from "@/domain/models";
+import { brandParts } from "@/domain/brand";
 
 type LinkItem = [string, string, LucideIcon];
 const readerLinks: LinkItem[] = [
   ["Discover", "/", Compass],
   ["All comics", "/comics", BookOpen],
+  ["Originals", "/originals", Star],
   ["New releases", "/new", Sparkles],
   ["Art gallery", "/art", ImageIcon],
   ["My library", "/library", Bookmark],
@@ -71,8 +73,10 @@ export function AppShell({
   user,
   service,
   origins,
+  siteName,
 }: {
   children: ReactNode;
+  siteName: string;
   service: ServiceId;
   origins: Record<ServiceId, string>;
   user: { name: string; role: Role } | null;
@@ -132,14 +136,15 @@ export function AppShell({
         <Link
           href="/"
           className="logo"
-          aria-label="Astra Comics home"
+          aria-label={`${siteName} home`}
           onClick={() => setOpen(false)}
         >
           <span className="logo-mark">
             <Star size={26} fill="currentColor" strokeWidth={1} />
           </span>
           <span className="brand-name">
-            astra<span>COMICS</span>
+            {brandParts(siteName).lead}
+            <span>{brandParts(siteName).rest}</span>
           </span>
         </Link>
         <div className="edition">STORIES LIVE HERE</div>
@@ -171,7 +176,7 @@ export function AppShell({
               <strong>A world beyond the preview.</strong>
               <p>Explore what’s coming for readers and independent creators.</p>
               <Link className="text-link" href="/membership">
-                Explore Astra Plus
+                Explore membership
               </Link>
             </div>
           )}
@@ -289,7 +294,7 @@ export function AppShell({
           {children}
           <footer className="footer">
             <span>
-              © {new Date().getFullYear()} Astra Comics. Made for stories worth
+              © {new Date().getFullYear()} {siteName}. Made for stories worth
               telling.
             </span>
             <div>

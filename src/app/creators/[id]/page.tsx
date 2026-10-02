@@ -5,6 +5,7 @@ import { currentUser } from "@/server/session";
 import { comicCard } from "@/server/dto";
 import { ComicGrid, Empty, Intro } from "@/components/ui";
 import { FollowButton } from "@/components/reader-actions";
+import { siteName } from "@/server/brand";
 export default async function Creator({
   params,
 }: {
@@ -16,16 +17,21 @@ export default async function Creator({
     author = await services.accounts.findUser(id);
   if (!author || !["author", "admin"].includes(author.role)) notFound();
   const user = await currentUser();
-  const [items, following] = await Promise.all([
+  const [items, following, name] = await Promise.all([
     services.publications.byAuthor(id),
     user ? services.community.isFollowing(user.id, id) : Promise.resolve(false),
+    siteName(),
   ]);
   const published = items.filter((item) => item.status === "published");
   return (
     <>
       <Intro
         title={author.name}
-        description="Independent creator at Astra Comics"
+        description={
+          author.role === "admin"
+            ? `${name} Originals team`
+            : `Independent creator at ${name}`
+        }
         action={
           user?.id !== id ? (
             <FollowButton

@@ -15,6 +15,7 @@ export function comicCard(publication: Publication) {
     kind: publication.kind,
     ageRating: publication.ageRating,
     pageCount: publication.pageCount,
+    original: !!publication.original,
     chapterCount: chapterRanges(publication).length,
     tags: publication.tags ?? [],
     pricePaise: publication.pricePaise ?? null,

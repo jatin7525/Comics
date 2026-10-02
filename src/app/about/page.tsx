@@ -1,10 +1,12 @@
 import { Intro } from "@/components/ui";
-export default function About() {
+import { siteName } from "@/server/brand";
+export default async function About() {
+  const name = await siteName();
   return (
     <>
       <Intro
         title="Stories live here."
-        description="Astra Comics is a home for independent visual storytelling."
+        description={`${name} is a home for independent visual storytelling.`}
       />
       <article className="panel prose">
         <h2>Every panel opens a world.</h2>
@@ -12,6 +14,11 @@ export default function About() {
           We bring readers, comic creators, and artists together. Browse every
           published story, read its first four pages freely, and follow the
           people whose worlds you want to return to.
+        </p>
+        <h2>{name} Originals</h2>
+        <p>
+          Alongside independent creators, we publish our own original stories
+          and characters. Look for the Originals badge.
         </p>
         <h2>Built around creators</h2>
         <p>

@@ -6,10 +6,11 @@ import { PublicationTable } from "@/components/publication-table";
 export default async function Admin() {
   await requireUser(["admin"]);
   const services = getServices();
-  const [metrics, queue, reports] = await Promise.all([
+  const [metrics, queue, reports, releases] = await Promise.all([
     services.community.metrics(),
     services.administration.reviewQueue(),
     services.administration.reports(),
+    services.administration.releaseQueue(),
   ]);
   return (
     <>
@@ -54,6 +55,28 @@ export default async function Admin() {
           <p className="muted">
             You’re all caught up. New submissions will appear here.
           </p>
+        )}
+      </section>
+      <section className="panel">
+        <div className="section-head">
+          <h2>New chapters awaiting review</h2>
+        </div>
+        {releases.length ? (
+          <ul className="release-queue">
+            {releases.map((publication) => (
+              <li key={publication.id}>
+                <Link href={`/admin/reviews/${publication.id}`}>
+                  {publication.title}: {publication.release?.title}
+                </Link>{" "}
+                <span className="muted">
+                  {publication.release?.pageCount} new pages · by{" "}
+                  {publication.authorName}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">No new chapters are waiting.</p>
         )}
       </section>
       <div className="notice section">

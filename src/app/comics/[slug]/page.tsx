@@ -8,6 +8,7 @@ import { serviceOrigins } from "@/server/service";
 import type { Metadata } from "next";
 import { accessLabels, BillingNotice, ComicGrid } from "@/components/ui";
 import { chapterRanges } from "@/domain/chapters";
+import { siteName } from "@/server/brand";
 import { PREVIEW_PAGES } from "@/domain/access";
 import {
   FollowButton,
@@ -51,7 +52,10 @@ export default async function ComicDetails({
   const services = getServices();
   const publication = await services.publications.findBySlug(slug);
   if (!publication || publication.status !== "published") notFound();
-  const related = await services.publications.related(publication);
+  const [related, name] = await Promise.all([
+    services.publications.related(publication),
+    siteName(),
+  ]);
   const chapters = chapterRanges(publication);
   const user = await currentUser();
   const [saved, following] = user
@@ -76,13 +80,20 @@ export default async function ComicDetails({
             alt={publication.title}
           />
           <span>
-            {publication.kind === "comic"
-              ? "AN ASTRA COMICS ORIGINAL"
-              : "ORIGINAL CREATOR ARTWORK"}
+            {publication.original
+              ? `A ${name.toUpperCase()} ORIGINAL`
+              : publication.kind === "comic"
+                ? "INDEPENDENT CREATOR COMIC"
+                : "ORIGINAL CREATOR ARTWORK"}
           </span>
         </div>
         <div className="detail-copy">
           <div className="detail-tags">
+            {publication.original && (
+              <Link className="tag original-tag" href="/originals">
+                ★ {name} Original
+              </Link>
+            )}
             <span className="tag">{publication.genre}</span>
             <span className="tag">
               {publication.ageRating === "everyone"

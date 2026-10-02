@@ -20,7 +20,17 @@ Readers see chapter counts on cards and a chapter list on the details page. The 
 
 To give existing comics a single "Chapter 1" covering all their pages, run `npm run db:chapters` (dry run) and then `npm run db:chapters -- --apply`. For another environment, point it at that environment's file: `npx tsx --env-file=.env.production scripts/chapters-backfill.ts --apply`. Comics that already have chapters, comics without pages, and artwork are skipped, so re-running is safe. Without local database access, run the **Backfill comic chapters** GitHub Actions workflow instead: add a `MONGODB_URI` repository secret, run it once as a dry run, then again with **apply** checked. Atlas network access must allow GitHub-hosted runners.
 
-Chapters are reviewed with the whole publication. Adding a new chapter to an already-published comic needs the post-publication revision workflow, which is still future work.
+Chapters in a draft are reviewed with the whole publication.
+
+### New chapters for published comics
+
+Authors add chapters to a published comic from Studio's Pages step ("Add a new chapter"): name the chapter, upload its pages in reading order, then submit it. Readers keep reading the published chapters meanwhile. New pages are stored after the public page count, so every reader route, image request and scroll batch treats them as nonexistent until approval. Admin lists submitted chapters on the dashboard; the review page shows the new pages separately and offers approve or request changes (with feedback). Approval atomically adds the pages to the comic, appends the chapter (a comic that had no chapters gets its earlier pages as "Chapter 1"), clears the release and records an audit event. Authors can rename or discard an unfinished chapter; discarding deletes its pages and images. One chapter can be in preparation at a time. Pages of a new chapter cannot yet be reordered or given story text before approval.
+
+## Originals and site name
+
+Publications created by administrator accounts are the platform's own **Originals** (set on the server; authors cannot set it). They carry an Originals badge, appear on `/originals` and in an Originals section on the home page, and their administrator creator may approve them in Admin, because they are the platform's own publications. Independent work still needs a different administrator to review it. Run the "Backfill comic chapters" workflow with task `originals` (or `npm run db:originals`) to mark works administrators uploaded before this change.
+
+The site name is not hard-coded. Administrators set it in Admin → Policies; it renders in the logo, page titles, footer and Originals labels of all three apps. Until one is saved, `SITE_NAME` from the environment, or "Astra Comics", is used.
 
 ## API additions
 

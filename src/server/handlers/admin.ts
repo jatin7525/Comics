@@ -5,6 +5,7 @@ import { getServices } from "../services";
 import {
   idSchema,
   policySchema,
+  releaseReviewSchema,
   reportSchema,
   reviewSchema,
   userUpdateSchema,
@@ -51,6 +52,17 @@ export const user = api(
       input.role,
       input.status,
       input.reason,
+    );
+    return NextResponse.json({ ok: true });
+  },
+  { roles: ["admin"] },
+);
+export const reviewRelease = api(
+  async (context) => {
+    await getServices().admin.reviewRelease(
+      actor(context),
+      idSchema.parse(context.params.id),
+      await jsonInput(context.request, releaseReviewSchema),
     );
     return NextResponse.json({ ok: true });
   },

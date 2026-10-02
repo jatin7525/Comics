@@ -167,6 +167,7 @@ export default async function AdminSection({
         <PolicyForm
           adsEnabled={policy.adsEnabled}
           submissionsEnabled={policy.submissionsEnabled}
+          siteName={policy.siteName}
         />
         {section === "ads" && (
           <div className="notice section">

@@ -9,7 +9,7 @@ Mutation requests require the exact configured `Origin` and JSON content type, e
 | POST /api/auth/register | `{ name, email, password }`; creates reader only |
 | POST /api/auth/login | `{ email, password }` |
 | POST /api/auth/logout | Revoke current session |
-| GET /api/catalog | `genre`, `access`, `search`, `cursor`, `limit` (1–24), `kind` |
+| GET /api/catalog | `genre`, `access`, `search`, `cursor`, `limit` (1–24), `kind`, `original=true` |
 | GET /api/comics/:id/cover | Public published cover or authorized workspace access |
 | GET /api/comics/:id/pages | `from`, `limit` (1–10); readable page numbers and image descriptions from `from`, stopping at the first locked page (`gate`, `gatePage`, `nextFrom`) |
 | GET /api/comics/:id/media/:page | Guest preview or server-verified reader entitlement; browser-cacheable for 7 days (`private`) |
@@ -23,10 +23,16 @@ Mutation requests require the exact configured `Origin` and JSON content type, e
 | PUT /api/publications/:id/chapters | `{ version, chapters: [{ id?, title, startPage }] }`; owner/admin, editable comic |
 | POST /api/publications/:id/submit | `{ version }`; complete assets + rights |
 | GET /api/studio/:id/media/:page | Owner/admin preview, including unpublished pages |
-| POST /api/admin/reviews/:id | `{ version, decision, note }`; separate reviewer |
+| POST /api/publications/:id/release | `{ version, title }`; start a new chapter on a published comic (owner/admin) |
+| PATCH /api/publications/:id/release | `{ version, title }`; rename the unfinished chapter |
+| DELETE /api/publications/:id/release | `{ version }`; discard the chapter and its pages |
+| POST /api/publications/:id/release/upload | Multipart `version`, `alt`, `file`; append a page to the new chapter |
+| POST /api/publications/:id/release/submit | `{ version }`; submit the chapter for review |
+| POST /api/admin/reviews/:id | `{ version, decision, note }`; separate reviewer, except an administrator's own Original |
+| POST /api/admin/releases/:id | `{ version, decision: approved/changes_requested, note }`; review a new chapter |
 | POST /api/admin/content/:id | `{ version, reason }`; hide published content |
 | PATCH /api/admin/users/:id | `{ role, status, reason }`; protected admin accounts |
-| PATCH /api/admin/policies | `{ adsEnabled, submissionsEnabled }` |
+| PATCH /api/admin/policies | `{ adsEnabled, submissionsEnabled, siteName? }` |
 | POST /api/admin/reports/:id | `{ reason }`; resolve report |
 
 Publication input: `title`, `synopsis`, `genre`, `kind` (comic/artwork), `access` (free/membership/purchase/both), `ageRating` (everyone/teen/mature), `rightsConfirmed`. Authorship and initial status are assigned on the server. Standalone artwork must be free. Comics require a cover and at least five pages before submission. Review decisions are published, changes_requested, or rejected; the latter two require actionable notes.

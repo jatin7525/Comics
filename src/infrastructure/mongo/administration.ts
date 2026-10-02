@@ -18,7 +18,11 @@ import {
   type SessionDoc,
 } from "./documents";
 import { ensure } from "@/domain/errors";
+import { DEFAULT_SITE_NAME } from "@/domain/brand";
 
+function fallbackSiteName() {
+  return process.env.SITE_NAME?.trim() || DEFAULT_SITE_NAME;
+}
 export class MongoAdministration implements AdministrationRepository {
   async reviewQueue() {
     const docs = await (
@@ -26,6 +30,17 @@ export class MongoAdministration implements AdministrationRepository {
     )
       .collection<PublicationDoc>("publications")
       .find({ status: "submitted" })
+      .sort({ updatedAt: 1 })
+      .limit(50)
+      .toArray();
+    return docs.map((doc) => fromDocument<Publication>(doc));
+  }
+  async releaseQueue() {
+    const docs = await (
+      await database()
+    )
+      .collection<PublicationDoc>("publications")
+      .find({ status: "published", "release.status": "submitted" })
       .sort({ updatedAt: 1 })
       .limit(50)
       .toArray();
@@ -93,17 +108,20 @@ export class MongoAdministration implements AdministrationRepository {
           id: "platform",
           adsEnabled: doc.adsEnabled,
           submissionsEnabled: doc.submissionsEnabled,
+          siteName: doc.siteName || fallbackSiteName(),
           updatedAt: doc.updatedAt,
         }
       : {
           id: "platform",
           adsEnabled: true,
           submissionsEnabled: true,
+          siteName: fallbackSiteName(),
           updatedAt: new Date(0),
         };
   }
   async updatePolicy(
-    patch: Pick<PlatformPolicy, "adsEnabled" | "submissionsEnabled">,
+    patch: Pick<PlatformPolicy, "adsEnabled" | "submissionsEnabled"> &
+      Partial<Pick<PlatformPolicy, "siteName">>,
     audit: AuditEvent,
   ) {
     const db = await database();

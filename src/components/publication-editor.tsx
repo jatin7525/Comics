@@ -29,6 +29,13 @@ export interface EditorData {
   pricePaise?: number | null;
   pages?: { id: string; number: number; alt: string; storyText?: string }[];
   chapters?: { id: string; title: string; startPage: number }[];
+  release?: {
+    id: string;
+    title: string;
+    status: "draft" | "submitted" | "changes_requested";
+    pageCount: number;
+    feedback: string | null;
+  } | null;
 }
 export function PublicationEditor({
   publication,

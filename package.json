@@ -33,7 +33,9 @@
     "test:onboarding": "node --env-file=.env.local tests/author-onboarding.mjs",
     "db:admin": "tsx --env-file=.env.local scripts/local-admin.ts",
     "test:studio": "node --env-file=.env.local tests/studio-publishing.mjs",
-    "db:chapters": "tsx --env-file=.env.local scripts/chapters-backfill.ts"
+    "db:chapters": "tsx --env-file=.env.local scripts/chapters-backfill.ts",
+    "db:originals": "tsx --env-file=.env.local scripts/originals-backfill.ts",
+    "test:originals": "node --env-file=.env.local tests/originals-releases.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1144.0",

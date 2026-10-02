@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { AdministrationRepository, PublicationRepository } from "./ports";
-import type { AuditEvent, PlatformPolicy, User } from "@/domain/models";
+import type {
+  AuditEvent,
+  Chapter,
+  PlatformPolicy,
+  User,
+} from "@/domain/models";
+import { validChapters } from "@/domain/chapters";
 import { ensure } from "@/domain/errors";
 
 export function requireAdmin(actor: User) {
@@ -44,8 +50,9 @@ export class AdminService {
     requireAdmin(actor);
     const current = await this.publications.find(id);
     ensure(current, "NOT_FOUND", "Publication not found.", 404);
+    // Originals are the platform's own publications, so the administrator who made one may publish it.
     ensure(
-      current.authorId !== actor.id,
+      current.authorId !== actor.id || current.original,
       "SELF_REVIEW",
       "A different administrator must review your publication.",
       403,
@@ -78,6 +85,94 @@ export class AdminService {
       ),
       "CONFLICT",
       "This submission has already changed. Reload the review queue.",
+      409,
+    );
+  }
+  async reviewRelease(
+    actor: User,
+    id: string,
+    input: {
+      version: number;
+      decision: "approved" | "changes_requested";
+      note: string;
+    },
+  ) {
+    requireAdmin(actor);
+    const current = await this.publications.find(id);
+    const release = current?.release;
+    ensure(
+      current &&
+        current.status === "published" &&
+        release?.status === "submitted",
+      "CONFLICT",
+      "This chapter is no longer awaiting review. Reload the queue.",
+      409,
+    );
+    ensure(
+      current.authorId !== actor.id || current.original,
+      "SELF_REVIEW",
+      "A different administrator must review your chapter.",
+      403,
+    );
+    const entry = audit(
+      actor,
+      `chapter_release.${input.decision}`,
+      id,
+      `${release.title}: ${input.note}`,
+    );
+    if (input.decision === "changes_requested") {
+      ensure(
+        input.note.trim().length >= 10,
+        "FEEDBACK_REQUIRED",
+        "Provide actionable editorial feedback.",
+      );
+      ensure(
+        await this.publications.update(
+          id,
+          input.version,
+          ["published"],
+          {
+            release: {
+              ...release,
+              status: "changes_requested",
+              feedback: input.note,
+              updatedAt: new Date(),
+            },
+          },
+          entry,
+        ),
+        "CONFLICT",
+        "This chapter has already changed. Reload the queue.",
+        409,
+      );
+      return;
+    }
+    // A comic published before chapters existed gets its earlier pages as Chapter 1.
+    const existing: Chapter[] = current.chapters?.length
+      ? current.chapters
+      : [{ id: randomUUID(), title: "Chapter 1", startPage: 1 }];
+    const chapters = [
+      ...existing,
+      {
+        id: release.id,
+        title: release.title,
+        startPage: current.pageCount + 1,
+      },
+    ];
+    ensure(
+      validChapters(chapters, current.pageCount + release.pageCount),
+      "INVALID_CHAPTERS",
+      "The existing chapters do not line up with the comic's pages.",
+    );
+    ensure(
+      await this.publications.approveRelease(
+        id,
+        input.version,
+        chapters,
+        entry,
+      ),
+      "CONFLICT",
+      "This chapter has already changed. Reload the queue.",
       409,
     );
   }
@@ -123,7 +218,8 @@ export class AdminService {
   }
   async policy(
     actor: User,
-    patch: Pick<PlatformPolicy, "adsEnabled" | "submissionsEnabled">,
+    patch: Pick<PlatformPolicy, "adsEnabled" | "submissionsEnabled"> &
+      Partial<Pick<PlatformPolicy, "siteName">>,
   ) {
     requireAdmin(actor);
     await this.administration.updatePolicy(

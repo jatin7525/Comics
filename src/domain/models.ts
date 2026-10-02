@@ -51,6 +51,11 @@ export interface Publication {
   pricePaise?: number | null;
   previewText?: string;
   chapters?: Chapter[];
+  // Published by the platform itself (created by an administrator), as opposed to an independent creator.
+  original?: boolean;
+  // A new chapter being prepared for an already-published comic. Its pages are stored after
+  // `pageCount` and stay invisible to readers until an administrator approves the release.
+  release?: ChapterRelease | null;
   rightsConfirmed: boolean;
   status: PublicationStatus;
   coverKey: string | null;
@@ -60,6 +65,15 @@ export interface Publication {
   createdAt: Date;
   updatedAt: Date;
   publishedAt: Date | null;
+}
+export interface ChapterRelease {
+  id: string;
+  title: string;
+  status: "draft" | "submitted" | "changes_requested";
+  pageCount: number;
+  feedback: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 export interface Chapter {
   id: string;
@@ -90,6 +104,7 @@ export interface CatalogQuery {
   cursor?: string;
   limit: number;
   kind: PublicationKind;
+  original?: boolean;
 }
 export interface Slice<T> {
   items: T[];
@@ -124,6 +139,7 @@ export interface PlatformPolicy {
   id: "platform";
   adsEnabled: boolean;
   submissionsEnabled: boolean;
+  siteName: string;
   updatedAt: Date;
 }
 export interface LibraryItem {
