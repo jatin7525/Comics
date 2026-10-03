@@ -4,6 +4,7 @@ import { requireUser } from "@/server/session";
 import { getServices } from "@/server/services";
 import { BillingNotice, Intro, Status } from "@/components/ui";
 import { PublicationTable } from "@/components/publication-table";
+import { ReleaseQueue } from "@/components/release-queue";
 import {
   HideForm,
   PolicyForm,
@@ -14,7 +15,7 @@ import {
 const titles: Record<string, [string, string]> = {
   reviews: [
     "Review queue.",
-    "Review all assets, publishing rights, and age ratings before approving a publication.",
+    "Review new comics and new chapters of published comics: assets, publishing rights and age ratings.",
   ],
   content: [
     "Content library.",
@@ -58,15 +59,24 @@ export default async function AdminSection({
     admin = services.administration;
   let content: React.ReactNode;
   if (section === "reviews") {
-    const queue = await admin.reviewQueue();
+    const [queue, releases] = await Promise.all([
+      admin.reviewQueue(),
+      admin.releaseQueue(),
+    ]);
     content = (
-      <section className="panel">
-        {queue.length ? (
-          <PublicationTable publications={queue} admin />
-        ) : (
-          <p className="muted">No submissions are awaiting review.</p>
-        )}
-      </section>
+      <>
+        <ReleaseQueue releases={releases} />
+        <section className="panel">
+          <div className="section-head">
+            <h2>New submissions</h2>
+          </div>
+          {queue.length ? (
+            <PublicationTable publications={queue} admin />
+          ) : (
+            <p className="muted">No submissions are awaiting review.</p>
+          )}
+        </section>
+      </>
     );
   } else if (section === "content") {
     const publications = await admin.content();

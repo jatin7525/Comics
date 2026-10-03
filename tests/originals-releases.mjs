@@ -179,6 +179,11 @@ try {
   // Admin approves the chapter from the dashboard.
   const console_ = await admin.newPage();
   await console_.goto("/admin");
+  await expect(
+    console_.getByRole("heading", { name: "New chapters awaiting review" }),
+  ).toBeVisible();
+  // Submitted chapters must also appear on the Review queue page itself.
+  await console_.goto("/admin/reviews");
   await console_
     .getByRole("link", { name: "Journey serial comic: The second arc" })
     .click();
@@ -188,9 +193,17 @@ try {
     path: "test-results/admin-release-review.png",
     fullPage: true,
   });
+  // Wait on the decision request itself: its first call compiles the route in development.
+  const decision = console_.waitForResponse(
+    (response) =>
+      response.url().includes("/api/admin/releases/") &&
+      response.request().method() === "POST",
+    { timeout: 30000 },
+  );
   await console_
     .getByRole("button", { name: "Save decision", exact: true })
     .click();
+  assert.equal((await decision).status(), 200);
   await expect(console_.getByText("Chapter decision saved.")).toBeVisible();
 
   const released = await db
