@@ -3,6 +3,7 @@ import { requireUser } from "@/server/session";
 import { getServices } from "@/server/services";
 import { Intro, Stats } from "@/components/ui";
 import { PublicationTable } from "@/components/publication-table";
+import { ReleaseQueue } from "@/components/release-queue";
 export default async function Admin() {
   await requireUser(["admin"]);
   const services = getServices();
@@ -27,8 +28,8 @@ export default async function Admin() {
           },
           {
             label: "Pending reviews",
-            value: metrics.submitted,
-            detail: "Awaiting editorial decisions",
+            value: metrics.submitted + releases.length,
+            detail: "New comics and new chapters",
           },
           {
             label: "Signed-in readers",
@@ -57,28 +58,7 @@ export default async function Admin() {
           </p>
         )}
       </section>
-      <section className="panel">
-        <div className="section-head">
-          <h2>New chapters awaiting review</h2>
-        </div>
-        {releases.length ? (
-          <ul className="release-queue">
-            {releases.map((publication) => (
-              <li key={publication.id}>
-                <Link href={`/admin/reviews/${publication.id}`}>
-                  {publication.title}: {publication.release?.title}
-                </Link>{" "}
-                <span className="muted">
-                  {publication.release?.pageCount} new pages · by{" "}
-                  {publication.authorName}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted">No new chapters are waiting.</p>
-        )}
-      </section>
+      <ReleaseQueue releases={releases} />
       <div className="notice section">
         Review new submissions, respond to reader reports, and manage publishing
         access. Editorial decisions and account changes are recorded in the
