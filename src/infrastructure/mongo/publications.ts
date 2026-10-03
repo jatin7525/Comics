@@ -359,7 +359,7 @@ export class MongoPublications implements PublicationRepository {
         await db
           .collection<PageDoc>("pages")
           .deleteMany({ comicId: id }, { session });
-        for (const name of ["saved", "progress"])
+        for (const name of ["saved", "progress", "comments"])
           await db.collection(name).deleteMany({ comicId: id }, { session });
         await publications.deleteOne({ _id: id, version }, { session });
         await db

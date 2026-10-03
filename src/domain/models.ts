@@ -75,6 +75,16 @@ export interface ChapterRelease {
   createdAt: Date;
   updatedAt: Date;
 }
+// A reader comment on one chapter; comics without chapters use the single thread "comic".
+export interface ChapterComment {
+  id: string;
+  comicId: string;
+  chapterId: string;
+  userId: string;
+  userName: string;
+  body: string;
+  createdAt: Date;
+}
 export interface Chapter {
   id: string;
   title: string;

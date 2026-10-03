@@ -22,6 +22,10 @@ To give existing comics a single "Chapter 1" covering all their pages, run `npm 
 
 Chapters in a draft are reviewed with the whole publication.
 
+### Chapter comments
+
+Each chapter has its own comment thread, shown after the chapter's last page on the reading screen (collapsed until opened). Comics without chapters have one thread after the last page. Anyone can read comments; signed-in readers may post when they can open the chapter's first page, so locked chapters cannot be discussed by readers without access. Comments are plain text up to 1,000 characters, newest first, 20 at a time, with posting limited to 10 per minute per account. The commenter, the comic's author and administrators can delete a comment, and the author's own comments carry an "Author" label. Deleting a chapter removes its thread; deleting a comic removes all its comments. Comment reporting and an admin comment queue are not built yet.
+
 ### New chapters for published comics
 
 Authors add chapters to a published comic from Studio's Pages step ("Add a new chapter"): name the chapter, upload its pages in reading order, then submit it. Readers keep reading the published chapters meanwhile. New pages are stored after the public page count, so every reader route, image request and scroll batch treats them as nonexistent until approval. Admin lists submitted chapters at the top of the Review queue and on the dashboard, and counts them in Pending reviews; the review page shows the new pages separately and offers approve or request changes (with feedback). Approval atomically adds the pages to the comic, appends the chapter (a comic that had no chapters gets its earlier pages as "Chapter 1"), clears the release and records an audit event. Authors can rename or discard an unfinished chapter; discarding deletes its pages and images. One chapter can be in preparation at a time. Pages of a new chapter cannot yet be reordered or given story text before approval.

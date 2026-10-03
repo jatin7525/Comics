@@ -147,3 +147,22 @@ export const chaptersSchema = z
   })
   .strict();
 export type ChapterInput = z.infer<typeof chapterInputSchema>;
+export const WHOLE_COMIC_THREAD = "comic";
+const threadSchema = z.union([
+  z.literal(WHOLE_COMIC_THREAD),
+  z.string().uuid(),
+]);
+export const commentSchema = z
+  .object({
+    chapterId: threadSchema,
+    body: z
+      .string()
+      .trim()
+      .min(1, "Write a comment first.")
+      .max(1000, "Keep comments under 1,000 characters."),
+  })
+  .strict();
+export const commentListSchema = z.object({
+  chapter: threadSchema,
+  cursor: z.string().max(240).optional(),
+});

@@ -2614,3 +2614,12 @@ button:disabled {
 .danger-zone h3 { margin:0 0 6px; color:var(--error); }
 .replace-label { position:relative; overflow:hidden; cursor:pointer; }
 .replace-label input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.chapter-comments { margin:20px 0 8px; }
+.chapter-comments > .secondary { display:inline-flex; align-items:center; gap:8px; }
+.chapter-comments h3 { margin:0 0 12px; font-size:16px; }
+.comment-list { list-style:none; padding:0; margin:16px 0; display:grid; gap:14px; }
+.comment-list li { border-top:1px solid var(--line); padding-top:12px; }
+.comment-meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:13px; }
+.comment-body { margin:6px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; }
+.comment-delete { margin-left:auto; background:transparent; border:0; color:var(--muted); cursor:pointer; padding:4px; }
+.comment-delete:hover { color:var(--error); }

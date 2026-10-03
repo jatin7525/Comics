@@ -222,6 +222,53 @@ try {
     home.getByRole("heading", { name: "Chapter 2 · The second arc" }),
   ).toBeVisible();
 
+  // Readers discuss each chapter beneath its last page.
+  const readerContext = await signIn(reader, "reader@astra.test");
+  const readerPage = await readerContext.newPage();
+  await readerPage.goto(`/read/${comic.slug}/5`);
+  await readerPage
+    .getByRole("button", { name: "Comments on Chapter 1", exact: true })
+    .click();
+  await expect(
+    readerPage.getByText("No comments yet. Be the first."),
+  ).toBeVisible();
+  await readerPage
+    .getByPlaceholder("What did you think of this chapter?")
+    .fill("That cliffhanger! Can't wait for the second arc.");
+  await readerPage
+    .getByRole("button", { name: "Post comment", exact: true })
+    .click();
+  await expect(
+    readerPage.getByText("That cliffhanger! Can't wait for the second arc."),
+  ).toBeVisible();
+  await expect(
+    readerPage.getByRole("heading", { name: /Comments on Chapter 1 · 1/ }),
+  ).toBeVisible();
+  await readerPage.screenshot({
+    path: "test-results/chapter-comments.png",
+    fullPage: true,
+  });
+  // Guests can read comments (page 5 is past their preview, so check the public API).
+  const guestContext = await browser.newContext({ baseURL: reader });
+  const chapterOne = (
+    await db.collection("publications").findOne({ _id: comic._id })
+  ).chapters[0].id;
+  const thread = await guestContext.request.get(
+    `/api/comics/${comic._id}/comments?chapter=${chapterOne}`,
+  );
+  const threadData = await thread.json();
+  assert.equal(threadData.total, 1);
+  assert.equal(threadData.items[0].canDelete, false);
+  const anonymous = await guestContext.request.post(
+    `/api/comics/${comic._id}/comments`,
+    {
+      headers: { Origin: reader },
+      data: { chapterId: chapterOne, body: "Guest comment" },
+    },
+  );
+  assert.equal(anonymous.status(), 401);
+  await guestContext.close();
+
   // The author edits the live comic directly; every change is immediate.
   page.on("dialog", (dialog) =>
     dialog.type() === "prompt"

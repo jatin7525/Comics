@@ -70,6 +70,9 @@ export async function ensureIndexes() {
     db.collection("reports").createIndex({ status: 1, createdAt: -1 }),
     db.collection("audit").createIndex({ createdAt: -1 }),
     db
+      .collection("comments")
+      .createIndex({ comicId: 1, chapterId: 1, createdAt: -1, _id: -1 }),
+    db
       .collection("rateLimits")
       .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ]);

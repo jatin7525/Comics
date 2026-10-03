@@ -23,6 +23,8 @@ import { PublicationService } from "../../src/application/publication-service";
 import { ReadingService } from "../../src/application/reading-service";
 import { AdminService } from "../../src/application/admin-service";
 import { chapterRanges } from "../../src/domain/chapters";
+import { MongoComments } from "../../src/infrastructure/mongo/comments";
+import { CommentService } from "../../src/application/comment-service";
 import type { Publication, User } from "../../src/domain/models";
 import type { PublicationInput } from "../../src/domain/validation";
 
@@ -39,9 +41,16 @@ const accounts = new MongoAccounts(),
   entitlements = new MongoEntitlements();
 const storage = createStorage(),
   auth = new AuthService(accounts),
-  publishing = new PublicationService(publications, storage, adminRepo),
+  publishing = new PublicationService(
+    publications,
+    storage,
+    adminRepo,
+    new MongoComments(),
+  ),
   admin = new AdminService(adminRepo, publications),
   reading = new ReadingService(publications, entitlements, storage, community);
+const commentRepo = new MongoComments(),
+  comments = new CommentService(commentRepo, publications, entitlements);
 const author: User = {
   id: randomUUID(),
   name: "Test Author",
@@ -543,6 +552,29 @@ describe("persistent publishing workflow", { concurrency: false }, () => {
       }),
       1,
     );
+    // Readers cannot discuss a chapter they cannot open.
+    const returnChapter = current.chapters!.at(-1)!;
+    await assert.rejects(
+      comments.post(other, created.id, returnChapter.id, "Spoilers ahead."),
+      /once you can read/,
+    );
+    await comments.post(
+      other,
+      created.id,
+      current.chapters![0]!.id,
+      "Lovely opening.",
+    );
+    assert.equal(
+      (
+        await comments.list(
+          created.id,
+          current.chapters![0]!.id,
+          undefined,
+          null,
+        )
+      ).total,
+      1,
+    );
     // Discarding an unfinished chapter deletes its pages and stored images.
     await publishing.startRelease(author, created.id, current.version, "Draft");
     current = (await publications.find(created.id))!;
@@ -790,6 +822,66 @@ describe("managing published comics", { concurrency: false }, () => {
     );
     await publishing.discardRelease(author, comic.id, current.version);
   });
+  it("keeps per-chapter comment threads with author and owner moderation", async () => {
+    const current = await fresh();
+    const [alpha, beta] = current.chapters!;
+    const reader = { ...other, name: "Chapter Reader" };
+    const mine = await comments.post(
+      reader,
+      comic.id,
+      alpha!.id,
+      "Loved this chapter!",
+    );
+    await comments.post(author, comic.id, alpha!.id, "Thank you for reading.");
+    await comments.post(reader, comic.id, beta!.id, "On to the next one.");
+    const list = await comments.list(comic.id, alpha!.id, undefined, reader);
+    assert.equal(list.total, 2);
+    assert.deepEqual(
+      list.items.map((item) => item.body),
+      ["Thank you for reading.", "Loved this chapter!"],
+    );
+    assert.deepEqual(
+      list.items.map((item) => [item.mine, item.canDelete, item.byAuthor]),
+      [
+        [false, false, true],
+        [true, true, false],
+      ],
+    );
+    const asOwner = await comments.list(comic.id, alpha!.id, undefined, author);
+    assert.ok(asOwner.items.every((item) => item.canDelete));
+    const asGuest = await comments.list(comic.id, alpha!.id, undefined, null);
+    assert.ok(asGuest.items.every((item) => !item.canDelete && !item.mine));
+    await assert.rejects(
+      comments.remove(reader, comic.id, asOwner.items[0]!.id),
+      /only delete your own/,
+    );
+    await comments.remove(author, comic.id, mine.id);
+    assert.equal(
+      (await comments.list(comic.id, alpha!.id, undefined, null)).total,
+      1,
+    );
+    await assert.rejects(
+      comments.list(comic.id, randomUUID(), undefined, null),
+      /Chapter not found/,
+    );
+    await assert.rejects(
+      comments.post(reader, comic.id, "comic", "Wrong thread."),
+      /Chapter not found/,
+    );
+    for (let n = 0; n < 21; n++)
+      await comments.post(reader, comic.id, alpha!.id, `Comment ${n}`);
+    const first = await comments.list(comic.id, alpha!.id, undefined, null);
+    assert.equal(first.items.length, 20);
+    assert.ok(first.nextCursor);
+    const second = await comments.list(
+      comic.id,
+      alpha!.id,
+      first.nextCursor!,
+      null,
+    );
+    assert.equal(second.items.length, 2);
+    assert.equal(second.nextCursor, null);
+  });
   it("permanently deletes a chapter, then the whole comic", async () => {
     let current = await fresh();
     const beta = current.chapters![1]!;
@@ -805,6 +897,14 @@ describe("managing published comics", { concurrency: false }, () => {
     );
     for (const page of betaPages)
       assert.equal(await storage.get(page.storageKey), null);
+    assert.equal(
+      await (
+        await database()
+      )
+        .collection("comments")
+        .countDocuments({ comicId: comic.id, chapterId: beta.id }),
+      0,
+    );
     await assert.rejects(
       publishing.deleteChapter(
         author,
@@ -827,6 +927,14 @@ describe("managing published comics", { concurrency: false }, () => {
     for (const page of remaining)
       assert.equal(await storage.get(page.storageKey), null);
     assert.equal(await storage.get(current.coverKey!), null);
+    assert.equal(
+      await (
+        await database()
+      )
+        .collection("comments")
+        .countDocuments({ comicId: comic.id }),
+      0,
+    );
     assert.equal(
       await (
         await database()
