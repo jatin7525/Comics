@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   AdministrationRepository,
+  CommentRepository,
   ObjectStorage,
   PublicationRepository,
 } from "./ports";
@@ -74,6 +75,7 @@ export class PublicationService {
     private readonly publications: PublicationRepository,
     private readonly storage: ObjectStorage,
     private readonly administration: AdministrationRepository,
+    private readonly comments?: CommentRepository,
   ) {}
   async create(actor: User, input: PublicationInput) {
     input = publicationSchema.parse(input);
@@ -375,6 +377,11 @@ export class PublicationService {
       "This comic changed. Reload before deleting the chapter.",
       409,
     );
+    await this.comments
+      ?.deleteFor(id, chapterId)
+      .catch(() =>
+        console.error("comment_cleanup_failed", { publicationId: id }),
+      );
     await Promise.all(
       doomed.map((page) =>
         this.storage

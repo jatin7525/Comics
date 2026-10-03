@@ -3,6 +3,7 @@ import type {
   AuditEvent,
   CatalogQuery,
   Chapter,
+  ChapterComment,
   ComicPage,
   DashboardMetrics,
   Entitlement,
@@ -122,6 +123,19 @@ export interface AdministrationRepository {
     audit: AuditEvent,
   ): Promise<void>;
   resolveReport(id: string, audit: AuditEvent): Promise<boolean>;
+}
+export interface CommentRepository {
+  list(
+    comicId: string,
+    chapterId: string,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<Slice<ChapterComment> & { total: number }>;
+  find(id: string): Promise<ChapterComment | null>;
+  create(comment: ChapterComment): Promise<void>;
+  delete(id: string): Promise<void>;
+  // Removes a chapter's thread, or every comment on the comic when chapterId is omitted.
+  deleteFor(comicId: string, chapterId?: string): Promise<void>;
 }
 export interface RateLimiter {
   consume(key: string, limit: number, windowSeconds: number): Promise<void>;

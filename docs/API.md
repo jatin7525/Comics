@@ -13,6 +13,9 @@ Mutation requests require the exact configured `Origin` and JSON content type, e
 | GET /api/comics/:id/cover | Public published cover or authorized workspace access |
 | GET /api/comics/:id/pages | `from`, `limit` (1–10); readable page numbers and image descriptions from `from`, stopping at the first locked page (`gate`, `gatePage`, `nextFrom`) |
 | GET /api/comics/:id/media/:page | Guest preview or server-verified reader entitlement; browser-cacheable for 7 days (`private`) |
+| GET /api/comics/:id/comments | `chapter` (chapter ID, or `comic` for a comic without chapters), `cursor`; newest 20 with `total`, public |
+| POST /api/comics/:id/comments | `{ chapterId, body }` (1–1000 chars); signed in and able to read the chapter's first page; 10 per minute |
+| DELETE /api/comics/:id/comments/:commentId | Comment author, the comic's author, or an administrator |
 | POST /api/comics/:id/save | `{ enabled }`; authenticated |
 | POST /api/comics/:id/progress | `{ page }`; must have reading access |
 | POST /api/comics/:id/report | `{ reason }`; authenticated |

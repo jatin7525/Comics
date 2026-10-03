@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, LockKeyhole } from "lucide-react";
 import { chapterForPage, type ChapterRange } from "@/domain/chapters";
 import type { AccessModel } from "@/domain/models";
+import { ChapterComments } from "./chapter-comments";
+
+// Mirrors WHOLE_COMIC_THREAD in domain/validation without bundling zod on the client.
+const WHOLE_COMIC_THREAD = "comic";
 
 export interface ReaderPage {
   number: number;
@@ -148,6 +152,19 @@ export function ReaderScroller({
       ? chapters[chapterIndex + 1]
       : null;
   const chapterStarts = new Map(chapters.map((item) => [item.startPage, item]));
+  const chapterEnds = new Map(chapters.map((item) => [item.endPage, item]));
+  // Each chapter's discussion follows its last page; comics without chapters have one thread.
+  function commentsAfter(pageNumber: number) {
+    const ending = chapterEnds.get(pageNumber);
+    if (ending)
+      return {
+        chapterId: ending.id,
+        label: `Chapter ${ending.number}`,
+      };
+    return !chapters.length && pageNumber === comic.pageCount
+      ? { chapterId: WHOLE_COMIC_THREAD, label: "this comic" }
+      : null;
+  }
 
   return (
     <div className="reader-scroller">
@@ -237,6 +254,19 @@ export function ReaderScroller({
               decoding="async"
               fetchPriority={index === 0 ? "high" : undefined}
             />
+            {(() => {
+              const thread = commentsAfter(page.number);
+              return thread ? (
+                <ChapterComments
+                  key={thread.chapterId}
+                  comicId={comic.id}
+                  chapterId={thread.chapterId}
+                  label={thread.label}
+                  authenticated={authenticated}
+                  loginHref={`/login?next=${encodeURIComponent(`/read/${comic.slug}/${page.number}`)}`}
+                />
+              ) : null;
+            })()}
           </section>
         );
       })}

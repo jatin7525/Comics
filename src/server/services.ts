@@ -15,6 +15,8 @@ import { PublicationService } from "@/application/publication-service";
 import { ReadingService } from "@/application/reading-service";
 import { AdminService } from "@/application/admin-service";
 import { createStorage } from "@/infrastructure/storage/factory";
+import { MongoComments } from "@/infrastructure/mongo/comments";
+import { CommentService } from "@/application/comment-service";
 
 function compose() {
   const accounts = new MongoAccounts();
@@ -24,6 +26,7 @@ function compose() {
   const administration = new MongoAdministration();
   const storage = createStorage();
   const applications = new MongoAuthorApplications();
+  const comments = new MongoComments();
   return {
     applications,
     authorApplications: new AuthorApplicationService(applications, storage),
@@ -35,7 +38,13 @@ function compose() {
     storage,
     limiter: new MongoRateLimiter(),
     auth: new AuthService(accounts, serviceId()),
-    publishing: new PublicationService(publications, storage, administration),
+    publishing: new PublicationService(
+      publications,
+      storage,
+      administration,
+      comments,
+    ),
+    comments: new CommentService(comments, publications, entitlements),
     reading: new ReadingService(publications, entitlements, storage, community),
     admin: new AdminService(administration, publications),
   };
