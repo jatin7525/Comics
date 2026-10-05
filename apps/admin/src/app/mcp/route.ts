@@ -11,7 +11,6 @@ export const maxDuration = 60;
 export const POST = (request: Request) =>
   boundary(request, async () => {
     const { auth, reading } = mcpServices();
-    await auth.enabled();
     const header = request.headers.get("authorization");
     ensure(
       header && header.startsWith("Bearer ") && header.length < 256,

@@ -5,6 +5,7 @@ import { boundedBody } from "../http";
 import { getServices } from "../services";
 import { mcpServices } from "./services";
 import { serviceId } from "../service";
+import { knownMcpOrigin } from "@/domain/mcp/origins";
 
 export function json(body: unknown, status = 200) {
   return Response.json(body, {
@@ -14,11 +15,14 @@ export function json(body: unknown, status = 200) {
 }
 export async function cors(request: Request, response: Response) {
   const { repository, origin } = mcpServices();
-  const allowed = [origin, ...(await repository.settings()).allowedOrigins];
   const incoming = request.headers.get("origin");
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("Vary", "Origin");
-  if (incoming && allowed.includes(incoming)) {
+  if (
+    incoming &&
+    (knownMcpOrigin(incoming, origin) ||
+      (await repository.settings()).allowedOrigins.includes(incoming))
+  ) {
     response.headers.set("Access-Control-Allow-Origin", incoming);
     response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     response.headers.set(
@@ -42,9 +46,9 @@ export async function guard(request: Request) {
     403,
   );
   const incoming = request.headers.get("origin");
-  const settings = await repository.settings();
+  if (!incoming || knownMcpOrigin(incoming, origin)) return;
   ensure(
-    !incoming || [origin, ...settings.allowedOrigins].includes(incoming),
+    (await repository.settings()).allowedOrigins.includes(incoming),
     "INVALID_ORIGIN",
     "Origin is not approved for MCP.",
     403,
