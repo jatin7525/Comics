@@ -167,8 +167,17 @@ export class McpAuthService {
     assertAdmin(user);
     return user;
   }
+  // RFC 8707 makes `resource` optional; when a client sends it, it must name this MCP endpoint.
+  private assertResource(value: string | null | undefined) {
+    ensure(
+      value == null ||
+        value.replace(/\/+$/, "") === this.resource.replace(/\/+$/, ""),
+      "invalid_target",
+      "The resource must be this MCP endpoint.",
+    );
+  }
   async authorization(query: URLSearchParams) {
-    await this.enabled();
+    const settings = await this.enabled();
     const value = z
       .object({
         response_type: z.literal("code"),
@@ -176,11 +185,21 @@ export class McpAuthService {
         redirect_uri: z.string().max(2048),
         code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
         code_challenge_method: z.literal("S256"),
-        resource: z.literal(this.resource),
+        resource: z.string().max(2048).optional(),
         scope: scopeSchema,
         state: z.string().max(2048).default(""),
       })
       .parse(Object.fromEntries(query));
+    this.assertResource(value.resource);
+    // Grant only the optional scopes this platform currently allows instead of failing sign-in.
+    value.scope = value.scope
+      .split(" ")
+      .filter(
+        (scope) =>
+          (scope !== "comics:preview" || settings.previewEnabled) &&
+          (scope !== "comics:annotate" || settings.annotationsEnabled),
+      )
+      .join(" ");
     const client = await this.approvedClient(value.client_id);
     ensure(
       client.redirectUris.includes(value.redirect_uri),
@@ -361,11 +380,7 @@ export class McpAuthService {
         "Invalid client credentials.",
         401,
       );
-    ensure(
-      input.get("resource") === this.resource,
-      "invalid_target",
-      "The resource must be this MCP endpoint.",
-    );
+    this.assertResource(input.get("resource"));
     if (input.get("grant_type") === "authorization_code") {
       const ticket = await this.repository.ticket(
         hash(z.string().min(20).max(200).parse(input.get("code"))),

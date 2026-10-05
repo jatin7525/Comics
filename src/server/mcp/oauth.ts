@@ -97,7 +97,8 @@ export const register = (request: Request) =>
     const input = await jsonInput(
       request,
       z.object({
-        client_name: z.string().trim().min(2).max(100),
+        // Optional in RFC 7591; not every client sends a name.
+        client_name: z.string().trim().min(2).max(100).default("MCP client"),
         redirect_uris: z.array(redirectSchema).min(1).max(10),
         token_endpoint_auth_method: z
           .enum(["none", "client_secret_post", "client_secret_basic"])

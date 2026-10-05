@@ -122,21 +122,16 @@ export interface McpTicket extends AuthorizationRequest {
   consumedAt: Date | null;
 }
 
+// OAuth lets a server grant fewer scopes than requested, so unknown scopes are ignored rather than
+// rejected (clients differ: some request every advertised scope, others add generic ones).
+// comics:read is always granted; optional scopes are kept only when requested.
 export const scopeSchema = z
   .string()
+  .max(1000)
   .default(MCP_SCOPE)
-  .refine((value) => {
-    const scopes = value.split(" ");
-    return (
-      scopes.includes(MCP_SCOPE) &&
-      scopes.every((scope) =>
-        [MCP_SCOPE, "comics:annotate", "comics:preview"].includes(scope),
-      ) &&
-      new Set(scopes).size === scopes.length
-    );
-  }, "Request comics:read with optional comics:annotate and comics:preview.")
-  .transform((value) =>
-    [MCP_SCOPE, "comics:annotate", "comics:preview"]
-      .filter((scope) => value.split(" ").includes(scope))
-      .join(" "),
-  );
+  .transform((value) => {
+    const requested = value.split(/\s+/);
+    return [MCP_SCOPE, "comics:annotate", "comics:preview"]
+      .filter((scope) => scope === MCP_SCOPE || requested.includes(scope))
+      .join(" ");
+  });

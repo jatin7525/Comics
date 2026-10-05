@@ -711,3 +711,64 @@ it("keeps BSON administrator identity across consent and token requests", async 
   );
   assert.ok(callback.searchParams.get("code"));
 });
+it("accepts Claude-style sign-in: every advertised scope, unknown scopes and no resource parameter", async () => {
+  await auth.configure(admin, {
+    ...defaults,
+    registrationEnabled: true,
+    previewEnabled: false,
+    annotationsEnabled: false,
+  });
+  const { client } = await auth.register({
+    name: "Claude",
+    redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
+  });
+  const verifier = "c".repeat(64);
+  const query = new URLSearchParams({
+    client_id: client.id,
+    response_type: "code",
+    redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+    scope: "comics:read comics:annotate comics:preview offline_access",
+    code_challenge: pkce(verifier),
+    code_challenge_method: "S256",
+    state: "claude-state",
+  });
+  // Disabled optional scopes and unknown scopes are dropped instead of failing sign-in.
+  const consent = await auth.consent(admin, query);
+  assert.equal(consent.scope, "comics:read");
+  const callback = new URL(await auth.approve(admin, consent.ticket, true));
+  assert.equal(
+    callback.origin + callback.pathname,
+    "https://claude.ai/api/mcp/auth_callback",
+  );
+  const body = new URLSearchParams({
+    client_id: client.id,
+    grant_type: "authorization_code",
+    code: callback.searchParams.get("code")!,
+    redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+    code_verifier: verifier,
+  });
+  const tokens = await auth.exchange(body);
+  assert.equal(tokens.scope, "comics:read");
+  assert.equal(
+    (await auth.authenticate(tokens.access_token)).user.id,
+    admin.id,
+  );
+  // Refresh also works without resource; a wrong resource is still refused.
+  const refreshed = await auth.exchange(
+    new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: client.id,
+      refresh_token: tokens.refresh_token,
+    }),
+  );
+  await auth.authenticate(refreshed.access_token);
+  const wrong = new URLSearchParams(query);
+  wrong.set("resource", "https://reader.example/mcp");
+  await assert.rejects(
+    () => auth.authorization(wrong),
+    /resource must be this MCP endpoint/,
+  );
+  const slash = new URLSearchParams(query);
+  slash.set("resource", `${resource}/`);
+  await auth.authorization(slash);
+});
