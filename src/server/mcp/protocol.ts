@@ -259,7 +259,7 @@ export function createComicMcp(
       {
         title: "Tag an image (administrator)",
         description:
-          "Replace a page's AI reference metadata only: canonical character names, visual tags and a description. Read the image first, reuse imageRevision and annotationVersion as expectedVersion. This does not modify artwork, story text, publishing or account data. Use consistent names and do not invent unseen details.",
+          "Replace a page's reference metadata: canonical character names, visual tags and a short visual description, and optionally the page's alt text and transcribed lettered dialogue (storyText; alt/storyText are left unchanged when omitted). Read the page with includeImage=true first and pass its imageRevision, and its annotationVersion as expectedVersion; the response returns the new annotationVersion for the next edit, and a mismatch is rejected instead of overwriting. Names and tags are stored lowercase and searched exactly, so keep one canonical name per character (put nicknames in the description) and reuse existing tags. Describe only what is visible. This never modifies artwork, publishing, accounts or purchases.",
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,
@@ -272,6 +272,8 @@ export function createComicMcp(
           imageRevision: z.string().regex(/^[a-f0-9]{64}$/),
           expectedVersion: z.number().int().min(0),
           ...annotationSchema.shape,
+          alt: z.string().trim().min(10).max(1000).optional(),
+          storyText: z.string().trim().max(12000).optional(),
         },
       },
       (input) =>

@@ -818,3 +818,71 @@ it("lets the administrator keep or untick optional scopes on the consent screen"
   assert.equal((await connect(["comics:preview"])).scope, "comics:read");
   assert.equal((await connect([])).scope, "comics:read");
 });
+
+it("tagging can also fill a page's alt text and dialogue, and returns the next annotationVersion", async () => {
+  await auth.configure(admin, { ...defaults, annotationsEnabled: true });
+  const { publication: pub } = await fixture("published", false);
+  const read = await reading.read(pub.slug, 1, admin, false);
+  assert.equal(read.data.annotationVersion, 0);
+  const first = await reading.annotate(admin, {
+    comicId: pub.slug,
+    page: 1,
+    imageRevision: read.data.imageRevision,
+    expectedVersion: 0,
+    characters: ["Ishita", "ishita "],
+    tags: ["Orb Hall", "red lightning"],
+    description: "Ishita (Didi) faces the orb hall under red lightning.",
+    alt: "Ishita stands in the orb hall as red lightning splits the sky.",
+    storyText: "ISHITA: Not again.",
+  });
+  assert.equal(first.annotationVersion, 1);
+  assert.deepEqual(first.characters, ["ishita"]);
+  assert.deepEqual(first.tags, ["orb hall", "red lightning"]);
+  const reread = await reading.read(pub.id, 1, admin, false);
+  assert.equal(reread.data.annotationVersion, 1);
+  assert.equal(reread.data.alt, first.alt);
+  assert.equal(reread.data.storyText, "ISHITA: Not again.");
+  assert.deepEqual(reread.data.annotation?.tags, ["orb hall", "red lightning"]);
+  // Omitted alt/story text stay as they are; a stale version is still refused.
+  const second = await reading.annotate(admin, {
+    comicId: pub.id,
+    page: 1,
+    imageRevision: read.data.imageRevision,
+    expectedVersion: first.annotationVersion,
+    characters: ["Ishita"],
+    tags: ["flashback"],
+    description: "A flashback.",
+  });
+  assert.equal(second.annotationVersion, 2);
+  assert.equal(second.storyText, "ISHITA: Not again.");
+  await assert.rejects(
+    () =>
+      reading.annotate(admin, {
+        comicId: pub.id,
+        page: 1,
+        imageRevision: read.data.imageRevision,
+        expectedVersion: 1,
+        characters: [],
+        tags: [],
+        description: "",
+      }),
+    /Tags changed/,
+  );
+  await assert.rejects(() =>
+    reading.annotate(admin, {
+      comicId: pub.id,
+      page: 1,
+      imageRevision: read.data.imageRevision,
+      expectedVersion: 2,
+      characters: [],
+      tags: [],
+      description: "",
+      alt: "short",
+    }),
+  );
+  assert.equal(
+    (await reading.references(admin, { tag: "flashback", limit: 10 })).items[0]
+      ?.page,
+    1,
+  );
+});
