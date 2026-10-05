@@ -47,7 +47,9 @@ export class MongoMcp implements McpRepository {
           previewEnabled: doc.previewEnabled ?? false,
           allowedPublicationIds: doc.allowedPublicationIds ?? [],
           allowedOrigins: doc.allowedOrigins,
-          generation: doc.generation,
+          // Older settings records predate credential generations. MongoDB
+          // serializes undefined ticket fields as null, so normalize before use.
+          generation: doc.generation ?? 0,
         }
       : { ...defaultMcpSettings };
   }

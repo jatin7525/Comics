@@ -248,7 +248,7 @@ it("OAuth code uses exact callback, resource, PKCE and single-use consent", asyn
   const c = await connection();
   await assert.rejects(
     () => auth.approve(admin, c.consent.ticket, true),
-    /Consent expired/,
+    /Consent already used/,
   );
   for (const [key, value] of [
     ["redirect_uri", "https://evil.invalid"],
@@ -633,5 +633,39 @@ it("independent-author comics cannot be selected or read even with a forged sett
       },
       true,
     ),
+  );
+});
+
+it("authorizes fresh consent when legacy MCP settings omit generation", async () => {
+  await (
+    await database()
+  )
+    .collection("mcpSettings")
+    .updateOne({ _id: "mcp" } as never, { $unset: { generation: "" } });
+  const c = await connection();
+  const tokens = await auth.exchange(c.body);
+  await auth.authenticate(tokens.access_token);
+});
+
+it("distinguishes expired consent from settings invalidation", async () => {
+  const c = await connection();
+  const expired = await auth.consent(admin, c.query);
+  await (
+    await database()
+  )
+    .collection("mcpTickets")
+    .updateOne({ _id: hash(expired.ticket) } as never, {
+      $set: { expiresAt: new Date(0) },
+    });
+  await assert.rejects(
+    () => auth.approve(admin, expired.ticket, true),
+    /Consent expired|no longer available/,
+  );
+  const invalidated = await auth.consent(admin, c.query);
+  await auth.configure(admin, { ...defaults, enabled: false });
+  await auth.configure(admin, defaults);
+  await assert.rejects(
+    () => auth.approve(admin, invalidated.ticket, true),
+    /Connection settings changed/,
   );
 });

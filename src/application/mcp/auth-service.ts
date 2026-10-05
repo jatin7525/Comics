@@ -247,13 +247,29 @@ export class McpAuthService {
     const settings = await this.enabled();
     const ticket = await this.repository.ticket(hash(rawTicket));
     ensure(
-      ticket?.kind === "consent" &&
-        ticket.userId === user.id &&
-        ticket.expiresAt > new Date() &&
-        !ticket.consumedAt &&
-        ticket.generation === settings.generation,
+      ticket?.kind === "consent",
       "invalid_request",
-      "Consent expired. Restart the connection.",
+      "Consent request is missing or no longer available. Restart the connection from your AI application.",
+    );
+    ensure(
+      ticket.userId === user.id,
+      "invalid_request",
+      "The signed-in account changed. Restart the connection with the same administrator account.",
+    );
+    ensure(
+      !ticket.consumedAt,
+      "invalid_request",
+      "Consent already used. Restart the connection from your AI application.",
+    );
+    ensure(
+      ticket.expiresAt > new Date(),
+      "invalid_request",
+      "Consent expired. Restart the connection from your AI application.",
+    );
+    ensure(
+      ticket.generation === settings.generation,
+      "invalid_request",
+      "Connection settings changed. Restart the connection from your AI application.",
     );
     const client = await this.approvedClient(ticket.clientId);
     ensure(
