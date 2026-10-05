@@ -49,7 +49,6 @@ export class MongoImageAnnotations implements AnnotationRepository {
     }
   }
   async search(query: {
-    comicIds: string[];
     character?: string;
     tag?: string;
     cursor?: string;
@@ -60,7 +59,6 @@ export class MongoImageAnnotations implements AnnotationRepository {
     )
       .collection<Doc>("imageAnnotations")
       .find({
-        comicId: { $in: query.comicIds },
         ...(query.character ? { characters: query.character } : {}),
         ...(query.tag ? { tags: query.tag } : {}),
         ...(query.cursor ? { _id: { $gt: query.cursor } } : {}),

@@ -18,17 +18,10 @@ export class McpReadingService {
     private readonly annotations: AnnotationRepository,
     private readonly mcp: McpRepository,
   ) {}
-  async allowed(user: User, publicationId?: string) {
+  async allowed(user: User) {
     assertAdmin(user);
     const settings = await this.mcp.settings();
     ensure(settings.enabled, "MCP_DISABLED", "MCP is disabled.", 403);
-    if (publicationId)
-      ensure(
-        settings.allowedPublicationIds.includes(publicationId),
-        "NOT_FOUND",
-        "This comic is not selected for MCP access.",
-        404,
-      );
     return settings;
   }
   async catalog(
@@ -44,11 +37,7 @@ export class McpReadingService {
         "Draft previews disabled.",
         403,
       );
-    const result = await this.publications.mcpCatalog(
-      settings.allowedPublicationIds,
-      query,
-      preview,
-    );
+    const result = await this.publications.mcpCatalog(query, preview);
     return {
       items: result.items.map((pub) => ({
         ...comicCard(pub),
@@ -79,7 +68,7 @@ export class McpReadingService {
       "Published comic not found.",
       404,
     );
-    await this.allowed(user, publication.id);
+    await this.allowed(user);
     return publication;
   }
   async previewComic(id: string, user: User) {
@@ -93,7 +82,7 @@ export class McpReadingService {
       "Comic not found.",
       404,
     );
-    const settings = await this.allowed(user, publication.id);
+    const settings = await this.allowed(user);
     ensure(
       settings.previewEnabled,
       "FORBIDDEN",
@@ -212,7 +201,7 @@ export class McpReadingService {
       409,
     );
     ensure(
-      (await this.allowed(user, publication.id)).annotationsEnabled,
+      (await this.allowed(user)).annotationsEnabled,
       "FORBIDDEN",
       "Image annotation disabled.",
       403,
@@ -267,7 +256,6 @@ export class McpReadingService {
       );
     const candidates = await this.annotations.search({
       ...query,
-      comicIds: settings.allowedPublicationIds,
       limit: query.limit,
     });
     const items = [];
@@ -277,8 +265,7 @@ export class McpReadingService {
         !pub ||
         (!preview && pub.status !== "published") ||
         pub.kind !== "comic" ||
-        pub.original !== true ||
-        !settings.allowedPublicationIds.includes(pub.id)
+        pub.original !== true
       )
         continue;
       // The page id survives reordering; resolve its current position, never trust stale numbering.

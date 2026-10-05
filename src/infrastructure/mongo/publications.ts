@@ -30,23 +30,7 @@ const cursorSchema = z.object({
   id: z.string().uuid(),
 });
 export class MongoPublications implements PublicationRepository {
-  async mcpSelectable(ids: string[]) {
-    return (
-      await (
-        await database()
-      )
-        .collection<PublicationDoc>("publications")
-        .find(
-          { _id: { $in: ids }, original: true, kind: "comic" },
-          { projection: { _id: 1 } },
-        )
-        .limit(500)
-        .maxTimeMS(3000)
-        .toArray()
-    ).map((doc) => doc._id);
-  }
   async mcpCatalog(
-    ids: string[],
     query: { cursor?: string; limit: number; search?: string; genre?: string },
     preview: boolean,
   ) {
@@ -57,7 +41,7 @@ export class MongoPublications implements PublicationRepository {
       .find({
         kind: "comic",
         original: true,
-        _id: { $in: ids, ...(query.cursor ? { $gt: query.cursor } : {}) },
+        ...(query.cursor ? { _id: { $gt: query.cursor } } : {}),
         ...(preview ? {} : { status: "published" }),
         ...(query.search ? { $text: { $search: query.search } } : {}),
         ...(query.genre ? { genre: query.genre as Publication["genre"] } : {}),

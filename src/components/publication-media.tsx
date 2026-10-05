@@ -658,7 +658,7 @@ export function PublicationMedia({
             </label>
             <p className="muted">
               {isRelease
-                ? "This chapter’s text stays private until publication. Authorized admin AI connections can read only admin-created comics explicitly shared in MCP settings."
+                ? "This chapter’s text stays private until publication. Authorized admin AI connections can read all admin-created comics."
                 : "Published preview text helps public search. Other page text stays protected. AI access is limited to explicitly shared admin-created comics."}
             </p>
             {editable && (

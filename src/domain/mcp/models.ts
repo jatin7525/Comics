@@ -7,6 +7,7 @@ export interface McpSettings {
   annotationsEnabled: boolean;
   previewEnabled: boolean;
   allowedOrigins: string[];
+  /** Legacy field retained for compatibility; MCP includes all admin comics. */
   allowedPublicationIds: string[];
   generation: number;
 }
@@ -57,7 +58,8 @@ export const settingsSchema = z
     allowedPublicationIds: z
       .array(z.string().uuid())
       .max(500)
-      .transform((ids) => [...new Set(ids)]),
+      .transform(() => [] as string[])
+      .default([]),
     allowedOrigins: z
       .array(
         z

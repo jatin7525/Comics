@@ -39,7 +39,7 @@ const repository = new MongoMcp(),
   publications = new MongoPublications(),
   annotations = new MongoImageAnnotations();
 const resource = "https://admin.example/mcp";
-const auth = new McpAuthService(repository, accounts, resource, publications);
+const auth = new McpAuthService(repository, accounts, resource);
 const objects = new Map<string, Uint8Array>();
 const storage: ObjectStorage = {
   async put(key, data) {
@@ -116,6 +116,9 @@ before(async () => {
     .toBuffer();
 });
 beforeEach(async () => {
+  const db = await database();
+  for (const name of ["publications", "pages", "imageAnnotations"])
+    await db.collection(name).deleteMany({});
   await auth.configure(admin, { ...defaults });
 });
 after(async () => {
@@ -218,9 +221,6 @@ async function fixture(
     .collection<Omit<ComicPage, "id"> & { _id: string }>("pages")
     .insertMany(pages.map(toDocument));
   return { publication, pages };
-}
-async function select(ids: string[]) {
-  await auth.configure(admin, { ...defaults, allowedPublicationIds: ids });
 }
 
 it("denies reader/author OAuth and Bearer connections, even for valid accounts", async () => {
@@ -346,40 +346,41 @@ it("revokes access immediately after account demotion and disable/re-enable", as
   await auth.configure(admin, defaults);
   await assert.rejects(() => auth.authenticate(token.token), /revoked/);
 });
-it("defaults to an empty curated catalog; direct IDs and slugs cannot bypass selection", async () => {
-  const selected = await fixture(),
-    outside = await fixture();
-  assert.deepEqual((await reading.catalog({ limit: 20 }, admin)).items, []);
-  await assert.rejects(
-    () => reading.details(selected.publication.id, admin),
-    /not selected/,
-  );
-  await select([selected.publication.id]);
+it("automatically includes existing and new admin comics without a selection", async () => {
+  const first = await fixture();
   assert.deepEqual(
     (await reading.catalog({ limit: 20 }, admin)).items.map((p) => p.id),
-    [selected.publication.id],
+    [first.publication.id],
   );
-  await assert.rejects(
-    () => reading.read(outside.publication.slug, 1, admin, true),
-    /not selected/,
+  const second = await fixture();
+  // Old stored selections must not restrict the automatic catalog.
+  await repository.updateSettings(
+    { ...defaults, allowedPublicationIds: [first.publication.id] },
+    auth.audit(admin, "test.settings", "mcp", "Legacy settings"),
   );
+  const catalog = await reading.catalog({ limit: 1 }, admin);
+  assert.equal(catalog.items.length, 1);
+  assert.ok(catalog.nextCursor);
+  const next = await reading.catalog(
+    { limit: 1, cursor: catalog.nextCursor },
+    admin,
+  );
+  assert.equal(next.items.length, 1);
+  assert.notEqual(next.items[0]!.id, catalog.items[0]!.id);
+  assert.equal(next.nextCursor, null);
+  await reading.details(first.publication.id, admin);
+  await reading.read(second.publication.slug, 1, admin, true);
   await assert.rejects(
     () => reading.catalog({ limit: 20 }, reader),
     /Only administrators/,
   );
-  const data = await reading.read(selected.publication.id, 2, admin, true);
+  const data = await reading.read(first.publication.id, 2, admin, true);
   assert(data.image);
   assert.equal(data.data.nextPage, null);
-  await select([]);
-  await assert.rejects(
-    () => reading.read(selected.publication.id, 1, admin, false),
-    /not selected/,
-  );
 });
 it("unpublished content needs preview scope and remains outside ordinary reads", async () => {
   const live = await fixture(),
     draft = await fixture("draft", false);
-  await select([live.publication.id, draft.publication.id]);
   await assert.rejects(
     () => reading.read(live.publication.id, 3, admin, false),
     /not found/,
@@ -418,7 +419,6 @@ it("unpublished content needs preview scope and remains outside ordinary reads",
 });
 it("tags are versioned, image-bound and references track page reordering", async () => {
   const { publication: pub, pages } = await fixture();
-  await select([pub.id]);
   const read = await reading.read(pub.id, 3, admin, false, true);
   const input = {
     comicId: pub.id,
@@ -527,7 +527,6 @@ it("private chapter supports page text, replace, reorder and delete without publ
 });
 it("SDK exposes no write/preview tools to read-only connections and returns page images", async () => {
   const { publication: pub } = await fixture();
-  await select([pub.id]);
   for (const elevated of [false, true]) {
     const server = createComicMcp(reading, admin, elevated, elevated);
     const client = new Client({ name: "integration-test", version: "1.0.0" });
@@ -572,7 +571,7 @@ it("SDK exposes no write/preview tools to read-only connections and returns page
   }
 });
 
-it("independent-author comics cannot be selected or read even with a forged settings entry", async () => {
+it("independent-author comics remain inaccessible even with a legacy settings entry", async () => {
   const { publication: pub, pages } = await fixture();
   await (
     await database()
@@ -582,8 +581,7 @@ it("independent-author comics cannot be selected or read even with a forged sett
       { _id: pub.id },
       { $set: { original: false, authorId: author.id } },
     );
-  await assert.rejects(() => select([pub.id]), /Only existing admin-created/);
-  // Defense in depth: bypass configuration validation to simulate stale or imported settings.
+  // Legacy selections must never expose independent-author content.
   await repository.updateSettings(
     { ...defaults, allowedPublicationIds: [pub.id] },
     auth.audit(admin, "test.settings", pub.id, "Test only"),

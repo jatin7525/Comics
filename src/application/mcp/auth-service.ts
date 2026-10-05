@@ -5,7 +5,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { z } from "zod";
-import type { AccountRepository, PublicationRepository } from "../ports";
+import type { AccountRepository } from "../ports";
 import type { McpRepository } from "./ports";
 import {
   clientSchema,
@@ -56,7 +56,6 @@ export class McpAuthService {
     readonly repository: McpRepository,
     private readonly accounts: AccountRepository,
     readonly resource: string,
-    private readonly publications: Pick<PublicationRepository, "mcpSelectable">,
   ) {}
   audit(
     user: User,
@@ -87,16 +86,8 @@ export class McpAuthService {
   async configure(user: User, input: unknown) {
     assertAdmin(user);
     const patch = settingsSchema.parse(input);
-    const eligible = await this.publications.mcpSelectable(
-      patch.allowedPublicationIds,
-    );
-    ensure(
-      eligible.length === patch.allowedPublicationIds.length,
-      "INVALID_SELECTION",
-      "Only existing admin-created comics can be shared with MCP. Remove independent-author, deleted, or artwork IDs.",
-    );
     await this.repository.updateSettings(
-      patch,
+      { ...patch, allowedPublicationIds: [] },
       this.audit(
         user,
         "mcp.settings",

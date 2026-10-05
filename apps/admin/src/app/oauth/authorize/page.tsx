@@ -51,9 +51,8 @@ export default async function Authorize({
       </span>
       <h1>Connect {consent.client.name}?</h1>
       <p>
-        Signed in as {user.email}. This client can read only the comics
-        explicitly selected in Admin → AI connections. Your account must remain
-        an active administrator.
+        Signed in as {user.email}. This client can read all admin-created comics
+        automatically. Your account must remain an active administrator.
       </p>
       <p>
         It cannot upload, publish, delete, buy comics, comment, or change your

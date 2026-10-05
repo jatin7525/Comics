@@ -13,12 +13,7 @@ export function mcpServices() {
     repository,
     origin,
     resource: `${origin}/mcp`,
-    auth: new McpAuthService(
-      repository,
-      services.accounts,
-      `${origin}/mcp`,
-      services.publications,
-    ),
+    auth: new McpAuthService(repository, services.accounts, `${origin}/mcp`),
     reading: new McpReadingService(
       services.publications,
       services.storage,

@@ -38,7 +38,6 @@ export const POST = api(
           annotationsEnabled: current.annotationsEnabled,
           previewEnabled: current.previewEnabled,
           allowedOrigins: current.allowedOrigins,
-          allowedPublicationIds: current.allowedPublicationIds,
         });
         await auth.configure(user, {
           ...settings,

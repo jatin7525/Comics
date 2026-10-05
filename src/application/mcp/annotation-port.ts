@@ -8,7 +8,6 @@ export interface AnnotationRepository {
     audit: AuditEvent,
   ): Promise<boolean>;
   search(query: {
-    comicIds: string[];
     character?: string;
     tag?: string;
     cursor?: string;

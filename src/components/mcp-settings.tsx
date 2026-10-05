@@ -82,12 +82,11 @@ export function McpSettingsPanel({
             : !settings.registrationEnabled
               ? "Enable automatic setup to connect using only this URL."
               : "Ready to connect."}
-          {settings.allowedPublicationIds.length === 0 &&
-            " No comics are shared yet. Choose which comics to share in access controls below."}
+          {" All admin-created comics are available automatically."}
         </p>
       </section>
       <details>
-        <summary>Access controls and shared comics</summary>
+        <summary>Access controls</summary>
         <form
           key={JSON.stringify(settings)}
           className="panel"
@@ -101,10 +100,6 @@ export function McpSettingsPanel({
                 registrationEnabled: f.has("enabled"),
                 annotationsEnabled: f.has("annotationsEnabled"),
                 previewEnabled: f.has("previewEnabled"),
-                allowedPublicationIds: String(f.get("publicationIds") ?? "")
-                  .split(/\r?\n/)
-                  .map((v) => v.trim())
-                  .filter(Boolean),
                 allowedOrigins: String(f.get("origins") ?? "")
                   .split(/\r?\n/)
                   .map((v) => v.trim())
@@ -152,21 +147,6 @@ export function McpSettingsPanel({
             <p className="muted">
               Separate comics:preview scope. Admin connections can inspect
               drafts and unreleased chapters; ordinary reading tokens cannot.
-            </p>
-            <label className="field">
-              Admin-created comics shared with AI connections (one publication
-              ID per line)
-              <textarea
-                name="publicationIds"
-                defaultValue={settings.allowedPublicationIds.join("\n")}
-                rows={5}
-              />
-            </label>
-            <p className="muted">
-              Copy the ID of an admin-created comic from its Studio or review
-              URL. Independent-author comics are never eligible. Leave empty to
-              share nothing. Removing an ID immediately blocks new MCP reads and
-              annotations for that comic.
             </p>
             <label className="field">
               Approved browser origins (one per line)

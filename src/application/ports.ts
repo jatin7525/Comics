@@ -26,9 +26,7 @@ export interface AccountRepository {
   deleteSession(hash: string): Promise<void>;
 }
 export interface PublicationRepository {
-  mcpSelectable(ids: string[]): Promise<string[]>;
   mcpCatalog(
-    ids: string[],
     query: { cursor?: string; limit: number; search?: string; genre?: string },
     preview: boolean,
   ): Promise<Slice<Publication>>;
