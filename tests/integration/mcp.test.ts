@@ -772,3 +772,49 @@ it("accepts Claude-style sign-in: every advertised scope, unknown scopes and no 
   slash.set("resource", `${resource}/`);
   await auth.authorization(slash);
 });
+
+it("lets the administrator keep or untick optional scopes on the consent screen", async () => {
+  await auth.configure(admin, {
+    ...defaults,
+    registrationEnabled: true,
+    annotationsEnabled: true,
+  });
+  const { client } = await auth.register({
+    name: "Claude",
+    redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
+  });
+  async function connect(keep?: string[]) {
+    const verifier = "k".repeat(64);
+    const consent = await auth.consent(
+      admin,
+      new URLSearchParams({
+        client_id: client.id,
+        response_type: "code",
+        redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+        scope: "comics:read comics:annotate",
+        code_challenge: pkce(verifier),
+        code_challenge_method: "S256",
+      }),
+    );
+    assert.equal(consent.scope, "comics:read comics:annotate");
+    const callback = new URL(
+      await auth.approve(admin, consent.ticket, true, keep),
+    );
+    return auth.exchange(
+      new URLSearchParams({
+        client_id: client.id,
+        grant_type: "authorization_code",
+        code: callback.searchParams.get("code")!,
+        redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+        code_verifier: verifier,
+      }),
+    );
+  }
+  assert.equal(
+    (await connect(["comics:annotate"])).scope,
+    "comics:read comics:annotate",
+  );
+  // Unticking annotation, or trying to add a scope that was never requested, yields read-only.
+  assert.equal((await connect(["comics:preview"])).scope, "comics:read");
+  assert.equal((await connect([])).scope, "comics:read");
+});
