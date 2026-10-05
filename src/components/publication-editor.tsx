@@ -41,16 +41,22 @@ export interface EditorData {
 export function PublicationEditor({
   publication,
   initialKind,
+  managementStep,
+  onSaved,
+  onBusy,
 }: {
   publication?: EditorData;
   initialKind?: PublicationKind;
+  managementStep?: 0 | 2 | 3;
+  onSaved?: (value: EditorData) => void;
+  onBusy?: (value: boolean) => void;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState(publication);
   const [kind, setKind] = useState<PublicationKind | undefined>(
     publication?.kind ?? initialKind,
   );
-  const [step, setStep] = useState(0),
+  const [step, setStep] = useState<number>(managementStep ?? 0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [access, setAccess] = useState<AccessModel>(
@@ -68,6 +74,7 @@ export function PublicationEditor({
   ];
   async function save(form: FormData, pricing = false) {
     setBusy(true);
+    onBusy?.(true);
     setError("");
     try {
       const value = {
@@ -117,11 +124,13 @@ export function PublicationEditor({
       if (!response.ok)
         throw new Error(data.error?.message ?? "Could not reload draft.");
       setDraft(data);
-      setStep(pricing ? 3 : 1);
+      onSaved?.(data);
+      if (managementStep === undefined) setStep(pricing ? 3 : 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save draft.");
     } finally {
       setBusy(false);
+      onBusy?.(false);
     }
   }
   if (!kind)
@@ -146,27 +155,31 @@ export function PublicationEditor({
     );
   return (
     <section className="panel publishing-workspace">
-      <div className="section-head">
-        <h2>{kind === "comic" ? "Comic publisher" : "Artwork publisher"}</h2>
-        {draft && <Status value={draft.status} />}
-      </div>
-      <nav className="publishing-steps" aria-label="Publishing steps">
-        {steps.map((label, index) => (
-          <button
-            key={label}
-            type="button"
-            disabled={busy || (!draft && index > 0)}
-            aria-current={step === index ? "step" : undefined}
-            onClick={() => {
-              setError("");
-              setStep(index);
-            }}
-          >
-            <span>{index + 1}</span>
-            {label}
-          </button>
-        ))}
-      </nav>
+      {managementStep === undefined && (
+        <div className="section-head">
+          <h2>{kind === "comic" ? "Comic publisher" : "Artwork publisher"}</h2>
+          {draft && <Status value={draft.status} />}
+        </div>
+      )}
+      {managementStep === undefined && (
+        <nav className="publishing-steps" aria-label="Publishing steps">
+          {steps.map((label, index) => (
+            <button
+              key={label}
+              type="button"
+              disabled={busy || (!draft && index > 0)}
+              aria-current={step === index ? "step" : undefined}
+              onClick={() => {
+                setError("");
+                setStep(index);
+              }}
+            >
+              <span>{index + 1}</span>
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
       {live && (
         <div className="notice" role="status">
           This work is live. Changes you save appear to readers immediately.
@@ -241,7 +254,11 @@ export function PublicationEditor({
             </p>
             {editable && (
               <button className="primary">
-                {busy ? "Saving…" : "Save & continue"}
+                {busy
+                  ? "Saving…"
+                  : managementStep !== undefined
+                    ? "Save details"
+                    : "Save & continue"}
               </button>
             )}
           </fieldset>
@@ -336,14 +353,20 @@ export function PublicationEditor({
               the community guidelines.
             </label>
             <div className="wizard-actions">
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setStep(1)}
-              >
-                Back
+              {managementStep === undefined && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setStep(1)}
+                >
+                  Back
+                </button>
+              )}
+              <button className="primary">
+                {managementStep !== undefined
+                  ? "Save access & price"
+                  : "Save & review"}
               </button>
-              <button className="primary">Save & review</button>
             </div>
           </fieldset>
         </form>
@@ -404,22 +427,26 @@ export function PublicationEditor({
               }
               onClick={async () => {
                 setBusy(true);
+                onBusy?.(true);
                 setError("");
                 try {
                   await requestJson(`/api/publications/${draft.id}/submit`, {
                     version: draft.version,
                   });
-                  setDraft({
+                  const submitted: EditorData = {
                     ...draft,
                     status: "submitted",
                     version: draft.version + 1,
-                  });
+                  };
+                  setDraft(submitted);
+                  onSaved?.(submitted);
                 } catch (e) {
                   setError(
                     e instanceof Error ? e.message : "Could not submit.",
                   );
                 } finally {
                   setBusy(false);
+                  onBusy?.(false);
                 }
               }}
             >
@@ -453,6 +480,7 @@ export function PublicationEditor({
                   return;
                 }
                 setBusy(true);
+                onBusy?.(true);
                 setError("");
                 try {
                   await requestJson(
@@ -466,6 +494,7 @@ export function PublicationEditor({
                     e instanceof Error ? e.message : "Could not delete.",
                   );
                   setBusy(false);
+                  onBusy?.(false);
                 }
               }}
             >

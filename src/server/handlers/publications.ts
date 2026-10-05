@@ -207,6 +207,24 @@ export const reorderPages = api(
   },
   { roles: ["author", "admin"] },
 );
+export const reorderReleasePages = api(
+  async (context) => {
+    const input = await jsonInput(
+      context.request,
+      z
+        .object({ version: z.number().int().min(1), ids: z.array(idSchema) })
+        .strict(),
+    );
+    await getServices().publishing.reorderRelease(
+      actor(context),
+      idSchema.parse(context.params.id),
+      input.version,
+      input.ids,
+    );
+    return NextResponse.json({ ok: true, version: input.version + 1 });
+  },
+  { roles: ["author", "admin"] },
+);
 export const editPage = api(
   async (context) => {
     const input = await jsonInput(context.request, pageTextSchema);

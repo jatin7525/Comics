@@ -26,6 +26,12 @@ export interface AccountRepository {
   deleteSession(hash: string): Promise<void>;
 }
 export interface PublicationRepository {
+  mcpSelectable(ids: string[]): Promise<string[]>;
+  mcpCatalog(
+    ids: string[],
+    query: { cursor?: string; limit: number; search?: string; genre?: string },
+    preview: boolean,
+  ): Promise<Slice<Publication>>;
   catalog(query: CatalogQuery): Promise<Slice<Publication>>;
   find(id: string): Promise<Publication | null>;
   findBySlug(slug: string): Promise<Publication | null>;
@@ -39,6 +45,7 @@ export interface PublicationRepository {
     audit?: AuditEvent,
   ): Promise<boolean>;
   page(comicId: string, number: number): Promise<ComicPage | null>;
+  pageById(comicId: string, id: string): Promise<ComicPage | null>;
   pages(comicId: string): Promise<ComicPage[]>;
   pageRange(comicId: string, from: number, to: number): Promise<ComicPage[]>;
   reorderPages(id: string, version: number, ids: string[]): Promise<boolean>;
@@ -75,6 +82,12 @@ export interface PublicationRepository {
   ): Promise<boolean>;
   related(publication: Publication): Promise<Publication[]>;
   addPage(publication: Publication, page: ComicPage): Promise<boolean>;
+  orderReleasePages(
+    id: string,
+    version: number,
+    ids: string[],
+    removedPageId?: string,
+  ): Promise<boolean>;
   addReleasePage(publication: Publication, page: ComicPage): Promise<boolean>;
   // Deletes the unreleased pages and clears the release; returns their storage keys, or null on conflict.
   discardRelease(id: string, version: number): Promise<string[] | null>;

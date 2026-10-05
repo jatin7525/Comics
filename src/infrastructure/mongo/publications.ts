@@ -30,6 +30,49 @@ const cursorSchema = z.object({
   id: z.string().uuid(),
 });
 export class MongoPublications implements PublicationRepository {
+  async mcpSelectable(ids: string[]) {
+    return (
+      await (
+        await database()
+      )
+        .collection<PublicationDoc>("publications")
+        .find(
+          { _id: { $in: ids }, original: true, kind: "comic" },
+          { projection: { _id: 1 } },
+        )
+        .limit(500)
+        .maxTimeMS(3000)
+        .toArray()
+    ).map((doc) => doc._id);
+  }
+  async mcpCatalog(
+    ids: string[],
+    query: { cursor?: string; limit: number; search?: string; genre?: string },
+    preview: boolean,
+  ) {
+    const docs = await (
+      await database()
+    )
+      .collection<PublicationDoc>("publications")
+      .find({
+        kind: "comic",
+        original: true,
+        _id: { $in: ids, ...(query.cursor ? { $gt: query.cursor } : {}) },
+        ...(preview ? {} : { status: "published" }),
+        ...(query.search ? { $text: { $search: query.search } } : {}),
+        ...(query.genre ? { genre: query.genre as Publication["genre"] } : {}),
+      })
+      .sort({ _id: 1 })
+      .limit(query.limit + 1)
+      .maxTimeMS(3000)
+      .toArray();
+    return {
+      items: docs
+        .slice(0, query.limit)
+        .map((doc) => fromDocument<Publication>(doc)),
+      nextCursor: docs.length > query.limit ? docs[query.limit - 1]!._id : null,
+    };
+  }
   async catalog(query: CatalogQuery) {
     const filter: Filter<PublicationDoc> = {
       status: "published",
@@ -153,6 +196,14 @@ export class MongoPublications implements PublicationRepository {
     )
       .collection<PageDoc>("pages")
       .findOne({ comicId, number });
+    return doc ? fromDocument<ComicPage>(doc) : null;
+  }
+  async pageById(comicId: string, id: string) {
+    const doc = await (
+      await database()
+    )
+      .collection<PageDoc>("pages")
+      .findOne({ _id: id, comicId });
     return doc ? fromDocument<ComicPage>(doc) : null;
   }
   async pages(comicId: string) {
@@ -323,7 +374,17 @@ export class MongoPublications implements PublicationRepository {
           { _id: pageId, comicId: id },
           { session },
         );
-        if (!publication || !page || page.number > publication.pageCount)
+        if (
+          !publication ||
+          !page ||
+          (page.number > publication.pageCount &&
+            (!publication.release ||
+              !["draft", "changes_requested"].includes(
+                publication.release.status,
+              ) ||
+              page.number >
+                publication.pageCount + publication.release.pageCount))
+        )
           return null;
         await pages.updateOne(
           { _id: pageId, comicId: id },
@@ -359,7 +420,12 @@ export class MongoPublications implements PublicationRepository {
         await db
           .collection<PageDoc>("pages")
           .deleteMany({ comicId: id }, { session });
-        for (const name of ["saved", "progress", "comments"])
+        for (const name of [
+          "saved",
+          "progress",
+          "comments",
+          "imageAnnotations",
+        ])
           await db.collection(name).deleteMany({ comicId: id }, { session });
         await publications.deleteOne({ _id: id, version }, { session });
         await db
@@ -392,14 +458,31 @@ export class MongoPublications implements PublicationRepository {
           { _id: pageId, comicId: id },
           { session },
         );
-        if (!publication || !page) return false;
+        if (
+          !publication ||
+          !page ||
+          (page.number > publication.pageCount &&
+            (!publication.release ||
+              !["draft", "changes_requested"].includes(
+                publication.release.status,
+              ) ||
+              page.number >
+                publication.pageCount + publication.release.pageCount))
+        )
+          return false;
         await pages.updateOne(
           { _id: pageId, comicId: id },
           { $set: { alt, storyText } },
           { session },
         );
         const preview = await pages
-          .find({ comicId: id, number: { $lte: 4 } }, { session })
+          .find(
+            {
+              comicId: id,
+              number: { $lte: Math.min(4, publication.pageCount) },
+            },
+            { session },
+          )
           .sort({ number: 1 })
           .toArray();
         const result = await publications.updateOne(
@@ -418,6 +501,71 @@ export class MongoPublications implements PublicationRepository {
         return result.modifiedCount === 1;
       }),
     );
+  }
+  async orderReleasePages(
+    id: string,
+    version: number,
+    ids: string[],
+    removedPageId?: string,
+  ) {
+    const db = await database();
+    return !!(await (
+      await mongoClient()
+    ).withSession((session) =>
+      session.withTransaction(async () => {
+        const publications = db.collection<PublicationDoc>("publications"),
+          pages = db.collection<PageDoc>("pages");
+        const pub = await publications.findOne(
+          {
+            _id: id,
+            version,
+            status: "published",
+            "release.status": { $in: ["draft", "changes_requested"] },
+          },
+          { session },
+        );
+        if (!pub?.release) return false;
+        const stored = await pages
+          .find({ comicId: id, number: { $gt: pub.pageCount } }, { session })
+          .toArray();
+        const available = new Map(
+          stored.filter((p) => p._id !== removedPageId).map((p) => [p._id, p]),
+        );
+        if (
+          stored.length !== pub.release.pageCount ||
+          (removedPageId && !stored.some((p) => p._id === removedPageId)) ||
+          ids.length !== available.size ||
+          new Set(ids).size !== ids.length ||
+          ids.some((id) => !available.has(id))
+        )
+          return false;
+        await pages.deleteMany(
+          { comicId: id, number: { $gt: pub.pageCount } },
+          { session },
+        );
+        if (ids.length)
+          await pages.insertMany(
+            ids.map((id, index) => ({
+              ...available.get(id)!,
+              number: pub.pageCount + index + 1,
+            })),
+            { session },
+          );
+        await publications.updateOne(
+          { _id: id, version },
+          {
+            $inc: { version: 1 },
+            $set: {
+              "release.pageCount": ids.length,
+              "release.updatedAt": new Date(),
+              updatedAt: new Date(),
+            },
+          },
+          { session },
+        );
+        return true;
+      }),
+    ));
   }
   async addReleasePage(publication: Publication, page: ComicPage) {
     const db = await database();

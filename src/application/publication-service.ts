@@ -307,11 +307,41 @@ export class PublicationService {
   async removePage(actor: User, id: string, version: number, pageId: string) {
     const current = await this.owned(actor, id);
     ensure(current.kind === "comic", "INVALID_KIND", "Only comics have pages.");
-    this.noPendingRelease(current);
     const page = (await this.publications.pages(id)).find(
       (item) => item.id === pageId,
     );
     ensure(page, "NOT_FOUND", "Page not found.", 404);
+    if (page.number > current.pageCount) {
+      await this.publishedComic(actor, id, version);
+      this.editableRelease(current);
+      const remaining = (
+        await this.publications.pageRange(
+          id,
+          current.pageCount + 1,
+          current.pageCount + current.release!.pageCount,
+        )
+      )
+        .filter((p) => p.id !== pageId)
+        .map((p) => p.id);
+      ensure(
+        await this.publications.orderReleasePages(
+          id,
+          version,
+          remaining,
+          pageId,
+        ),
+        "CONFLICT",
+        "Chapter changed. Reload before deleting a page.",
+        409,
+      );
+      await this.storage
+        .delete(page.storageKey)
+        .catch(() =>
+          console.error("storage_cleanup_failed", { publicationId: id }),
+        );
+      return;
+    }
+    this.noPendingRelease(current);
     ensure(
       current.status !== "published" || current.pageCount > 1,
       "LAST_PAGE",
@@ -418,6 +448,21 @@ export class PublicationService {
             console.error("storage_cleanup_failed", { publicationId: id }),
           ),
       ),
+    );
+  }
+  async reorderRelease(
+    actor: User,
+    id: string,
+    version: number,
+    ids: string[],
+  ) {
+    const current = await this.publishedComic(actor, id, version);
+    this.editableRelease(current);
+    ensure(
+      await this.publications.orderReleasePages(id, version, ids),
+      "CONFLICT",
+      "Chapter changed or page order is invalid. Reload.",
+      409,
     );
   }
   async reorder(actor: User, id: string, version: number, ids: string[]) {

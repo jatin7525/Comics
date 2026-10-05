@@ -52,10 +52,10 @@ export function PublicationTable({
                   href={
                     admin
                       ? `/admin/reviews/${item.id}`
-                      : `/studio/publications/${item.id}`
+                      : `/studio/publications/${item.id}/edit`
                   }
                 >
-                  {admin ? "Review" : "Open"}
+                  {admin ? "Review" : "Edit"}
                 </Link>
               </td>
             </tr>

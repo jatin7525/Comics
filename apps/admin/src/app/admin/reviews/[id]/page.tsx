@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { serviceOrigins } from "@/server/service";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/server/session";
 import { getServices } from "@/server/services";
@@ -43,6 +45,22 @@ export default async function Review({
       <div className="editor-layout">
         <section className="panel">
           <h2>Submission overview</h2>
+          <Link
+            className="text-link"
+            href={`${serviceOrigins().studio}/studio/publications/${id}/edit`}
+          >
+            Edit comic & chapters in Studio ↗
+          </Link>
+          {release && (
+            <p>
+              <Link
+                className="text-link"
+                href={`${serviceOrigins().studio}/studio/publications/${id}/chapters/${release.id}`}
+              >
+                Open unpublished chapter editor ↗
+              </Link>
+            </p>
+          )}
           {publication.coverKey && (
             <img
               className="editor-cover"

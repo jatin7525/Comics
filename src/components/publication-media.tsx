@@ -18,31 +18,74 @@ export function PublicationMedia({
   publication,
   onChange,
   onBusy,
+  mode = "create",
+  chapterId,
+  onDirty,
 }: {
   publication: EditorData;
-  onChange: (value: EditorData) => void;
+  onChange: (value: EditorData) => void | Promise<void>;
   onBusy: (value: boolean) => void;
+  mode?: "create" | "pages" | "cover" | "release";
+  chapterId?: string;
+  onDirty?: (value: boolean) => void;
 }) {
   const [files, setFiles] = useState<{ id: string; file: File }[]>([]);
   const [cover, setCover] = useState<File | null>(null);
+  const [textDirty, setTextDirty] = useState(false);
+  const dirty = textDirty || files.length > 0 || !!cover;
+  useEffect(() => {
+    onDirty?.(dirty);
+  }, [dirty, onDirty]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const [selected, setSelected] = useState<string | null>(null);
   // null keeps new pages in the current last chapter; a string starts a new chapter with them.
   const [newChapter, setNewChapter] = useState<string | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [progress, setProgress] = useState("");
+  const isRelease = mode === "release";
   // Pages beyond pageCount belong to an unreleased chapter and are managed in the release panel.
-  const pages = (publication.pages ?? []).filter(
-    (page) => page.number <= publication.pageCount,
+  const allPages = (publication.pages ?? []).filter((page) =>
+    isRelease
+      ? page.number > publication.pageCount
+      : page.number <= publication.pageCount,
   );
+  const chapterIndex = (publication.chapters ?? []).findIndex(
+    (c) => c.id === chapterId,
+  );
+  const from =
+    chapterIndex >= 0 ? publication.chapters![chapterIndex]!.startPage : 1;
+  const to =
+    chapterIndex >= 0
+      ? (publication.chapters![chapterIndex + 1]?.startPage ??
+          publication.pageCount + 1) - 1
+      : publication.pageCount;
+  const pages =
+    mode === "cover"
+      ? []
+      : allPages.filter(
+          (p) => isRelease || (p.number >= from && p.number <= to),
+        );
   const page = pages.find((page) => page.id === selected) ?? pages[0];
-  const editable = ["draft", "changes_requested", "published"].includes(
-    publication.status,
-  );
+  const editable =
+    (isRelease
+      ? !!publication.release &&
+        ["draft", "changes_requested"].includes(publication.release.status)
+      : true) &&
+    ["draft", "changes_requested", "published"].includes(publication.status);
   const live = publication.status === "published";
   // While a new chapter is being prepared, the published page sequence stays fixed.
-  const canChangePages = editable && !(live && publication.release);
-  const [target, setTarget] = useState("");
+  const canChangePages =
+    editable && (isRelease || !(live && publication.release));
+  const [target, setTarget] = useState(chapterId ?? "");
   const chapters = publication.chapters ?? [];
   const chapterStarts = new Map(
     chapters.map((chapter, index) => [chapter.startPage, index + 1]),
@@ -74,7 +117,8 @@ export function PublicationMedia({
       throw new Error(
         data.error?.message ?? "Reload this draft to see its saved images.",
       );
-    onChange(data);
+    await onChange(data);
+    setTextDirty(false);
   }
   function choose(input: HTMLInputElement, isCover: boolean) {
     const chosen = Array.from(input.files ?? []);
@@ -102,7 +146,7 @@ export function PublicationMedia({
   async function upload() {
     await run(async () => {
       let version = publication.version;
-      const firstNewPage = pages.length + 1;
+      const firstNewPage = allPages.length + 1;
       const queue = [
         ...(cover ? [{ id: "cover", file: cover, kind: "cover" }] : []),
         ...files.map((item) => ({ ...item, kind: "page" })),
@@ -127,7 +171,7 @@ export function PublicationMedia({
             ),
           );
           const response = await fetch(
-            `/api/publications/${publication.id}/upload`,
+            `/api/publications/${publication.id}/${isRelease ? "release/upload" : "upload"}`,
             { method: "POST", body: form },
           );
           const data = await response.json();
@@ -175,44 +219,57 @@ export function PublicationMedia({
   return (
     <section className="publishing-media">
       <h2>
-        {publication.kind === "comic"
-          ? "Build your comic’s reading order"
-          : "Upload your artwork"}
+        {mode === "release"
+          ? "Unpublished chapter pages"
+          : mode === "pages"
+            ? "Edit pages"
+            : mode === "cover"
+              ? "Cover & thumbnail"
+              : publication.kind === "comic"
+                ? "Build your comic’s reading order"
+                : "Upload your artwork"}
       </h2>
       <p className="muted">
-        {publication.kind === "comic"
-          ? "Select all your pages together. Arrange them below, then upload the selection. The first four pages become the public preview."
-          : "Your artwork is displayed as a single image. Add its description in Details."}
+        {isRelease
+          ? "Upload one page or a whole chapter. Preview, replace and reorder each page before submitting for review. These pages stay private until approval."
+          : publication.kind === "comic"
+            ? "Select all your pages together. Arrange them below, then upload the selection. The first four pages become the public preview."
+            : "Your artwork is displayed as a single image. Add its description in Details."}
       </p>
-      <div className="cover-upload">
-        <div>
-          {cover ? (
-            <LocalPreview file={cover} />
-          ) : publication.hasCover ? (
-            <img
-              src={`/api/comics/${publication.id}/cover?v=${publication.version}`}
-              alt="Saved cover"
+      {mode !== "pages" && !isRelease && (
+        <div className="cover-upload">
+          <div>
+            {cover ? (
+              <LocalPreview file={cover} />
+            ) : publication.hasCover ? (
+              <img
+                src={`/api/comics/${publication.id}/cover?v=${publication.version}`}
+                alt="Saved cover"
+              />
+            ) : (
+              <span>No image yet</span>
+            )}
+          </div>
+          <label className="field">
+            {publication.kind === "comic"
+              ? "Cover / thumbnail"
+              : "Artwork image"}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              disabled={busy || !editable}
+              onChange={(e) => choose(e.currentTarget, true)}
             />
-          ) : (
-            <span>No image yet</span>
-          )}
+          </label>
         </div>
-        <label className="field">
-          {publication.kind === "comic" ? "Cover / thumbnail" : "Artwork image"}
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={busy || !editable}
-            onChange={(e) => choose(e.currentTarget, true)}
-          />
-        </label>
-      </div>
-      {publication.kind === "comic" && (
+      )}
+      {mode !== "cover" && publication.kind === "comic" && (
         <>
-          {live && publication.release && (
+          {live && publication.release && !isRelease && (
             <div className="notice" role="status">
               Page changes are paused while your new chapter is being prepared.
-              Finish or discard it below to add, move, replace or remove pages.
+              Open the new chapter editor to finish or discard it before
+              changing the published page sequence.
             </div>
           )}
           {canChangePages && (
@@ -230,27 +287,30 @@ export function PublicationMedia({
           {!!files.length && (
             <>
               <h3>Ready to upload · {files.length} pages</h3>
-              {!!chapters.length && newChapter === null && (
-                <label className="field">
-                  Add these pages to
-                  <select
-                    value={target}
-                    disabled={busy}
-                    onChange={(e) => setTarget(e.target.value)}
-                  >
-                    <option value="">
-                      The end of the comic (
-                      {chapters.at(-1)?.title ?? "last chapter"})
-                    </option>
-                    {chapters.slice(0, -1).map((chapter, index) => (
-                      <option key={chapter.id} value={chapter.id}>
-                        The end of chapter {index + 1}: {chapter.title}
+              {!!chapters.length &&
+                newChapter === null &&
+                !chapterId &&
+                !isRelease && (
+                  <label className="field">
+                    Add these pages to
+                    <select
+                      value={target}
+                      disabled={busy}
+                      onChange={(e) => setTarget(e.target.value)}
+                    >
+                      <option value="">
+                        The end of the comic (
+                        {chapters.at(-1)?.title ?? "last chapter"})
                       </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {!live && (
+                      {chapters.slice(0, -1).map((chapter, index) => (
+                        <option key={chapter.id} value={chapter.id}>
+                          The end of chapter {index + 1}: {chapter.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              {!live && mode === "create" && (
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -359,7 +419,16 @@ export function PublicationMedia({
                 <button
                   type="button"
                   className="page-preview-button"
-                  onClick={() => setSelected(item.id)}
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      textDirty &&
+                      !window.confirm("Discard unsaved page text?")
+                    )
+                      return;
+                    setTextDirty(false);
+                    setSelected(item.id);
+                  }}
                   aria-label={`Preview page ${item.number}`}
                 >
                   <img
@@ -375,7 +444,11 @@ export function PublicationMedia({
                     </strong>
                   )}
                   Page {item.number}
-                  {item.number <= 4 ? " · Free preview" : ""}
+                  {isRelease
+                    ? " · Unpublished"
+                    : item.number <= 4
+                      ? " · Free preview"
+                      : ""}
                 </figcaption>
                 <div className="sample-actions">
                   {[-1, 1].map((direction) => (
@@ -392,13 +465,14 @@ export function PublicationMedia({
                       }
                       onClick={() =>
                         run(async () => {
-                          const ids = pages.map((page) => page.id);
-                          [ids[index], ids[index + direction]] = [
-                            ids[index + direction]!,
-                            ids[index]!,
+                          const ids = allPages.map((page) => page.id);
+                          const position = ids.indexOf(item.id);
+                          [ids[position], ids[position + direction]] = [
+                            ids[position + direction]!,
+                            ids[position]!,
                           ];
                           await requestJson(
-                            `/api/publications/${publication.id}/pages/order`,
+                            `/api/publications/${publication.id}/${isRelease ? "release/order" : "pages/order"}`,
                             { version: publication.version, ids },
                           );
                           await reload();
@@ -456,7 +530,9 @@ export function PublicationMedia({
                       <button
                         type="button"
                         className="secondary"
-                        disabled={busy || (live && pages.length <= 1)}
+                        disabled={
+                          busy || (!isRelease && live && pages.length <= 1)
+                        }
                         aria-label={`Remove page ${item.number}`}
                         onClick={() => {
                           if (
@@ -485,16 +561,18 @@ export function PublicationMedia({
           </div>
         </>
       )}
-      {publication.kind === "comic" && publication.status === "published" && (
-        <ChapterReleasePanel
-          key={`${publication.release?.id ?? "none"}-${publication.version}`}
-          publication={publication}
-          busy={busy}
-          run={run}
-          reload={reload}
-        />
-      )}
-      {publication.kind === "comic" && (
+      {mode === "create" &&
+        publication.kind === "comic" &&
+        publication.status === "published" && (
+          <ChapterReleasePanel
+            key={publication.release?.id ?? "none"}
+            publication={publication}
+            busy={busy}
+            run={run}
+            reload={reload}
+          />
+        )}
+      {mode === "create" && publication.kind === "comic" && (
         <ChapterEditor
           key={publication.version}
           publication={publication}
@@ -537,6 +615,7 @@ export function PublicationMedia({
             />
           </a>
           <form
+            onChange={() => setTextDirty(true)}
             onSubmit={(e) => {
               e.preventDefault();
               const form = new FormData(e.currentTarget);
@@ -578,9 +657,9 @@ export function PublicationMedia({
               />
             </label>
             <p className="muted">
-              Readers can read this text alongside the image. Text on the first
-              four pages also helps public search. Later pages follow the
-              comic’s access rules.
+              {isRelease
+                ? "This chapter’s text stays private until publication. Authorized admin AI connections can read only admin-created comics explicitly shared in MCP settings."
+                : "Published preview text helps public search. Other page text stays protected. AI access is limited to explicitly shared admin-created comics."}
             </p>
             {editable && (
               <button className="secondary" disabled={busy}>

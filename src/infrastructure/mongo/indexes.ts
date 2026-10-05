@@ -13,6 +13,18 @@ export async function ensureIndexes() {
   const legacy = indexes.find((index) => index.weights && !index.weights.tags);
   if (legacy?.name) await publications.dropIndex(legacy.name);
   await Promise.all([
+    db.collection("mcpClients").createIndex({ createdAt: -1 }),
+    db.collection("mcpGrants").createIndex({ userId: 1, createdAt: -1 }),
+    db.collection("mcpGrants").createIndex({ createdAt: -1 }),
+    db
+      .collection("mcpGrants")
+      .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    db
+      .collection("mcpTickets")
+      .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    db.collection("imageAnnotations").createIndex({ characters: 1, _id: 1 }),
+    db.collection("imageAnnotations").createIndex({ tags: 1, _id: 1 }),
+    db.collection("imageAnnotations").createIndex({ comicId: 1 }),
     db
       .collection("authorApplications")
       .createIndex({ userId: 1 }, { unique: true }),

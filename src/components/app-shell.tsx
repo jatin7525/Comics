@@ -66,6 +66,7 @@ const adminLinks: LinkItem[] = [
   ["Memberships", "/admin/memberships", Crown],
   ["Ad placements", "/admin/ads", ImageIcon],
   ["Policies", "/admin/policies", Settings],
+  ["AI connections", "/admin/mcp", Settings],
   ["Audit log", "/admin/audit", FileClock],
 ];
 export function AppShell({
