@@ -4,7 +4,8 @@ import type { PublicationRepository, ObjectStorage } from "../ports";
 import type { AnnotationRepository } from "./annotation-port";
 import type { CatalogQuery, User } from "@/domain/models";
 import { chapterRanges } from "@/domain/chapters";
-import { ensure } from "@/domain/errors";
+import { AppError, ensure } from "@/domain/errors";
+import { pageTextSchema } from "@/domain/validation";
 import { comicCard } from "@/domain/publication-dto";
 import { annotationSchema } from "@/domain/mcp/annotations";
 import { assertAdmin } from "./auth-service";
@@ -187,10 +188,17 @@ export class McpReadingService {
       characters: string[];
       tags: string[];
       description: string;
+      alt?: string;
+      storyText?: string;
     },
     preview = false,
   ) {
     assertAdmin(user);
+    const text = pageTextSchema
+      .pick({ alt: true, storyText: true })
+      .partial()
+      .parse({ alt: input.alt, storyText: input.storyText });
+    const editsText = text.alt !== undefined || text.storyText !== undefined;
     const { publication, page } = preview
       ? await this.previewPage(input.comicId, input.page, user)
       : await this.page(input.comicId, input.page, user);
@@ -229,7 +237,7 @@ export class McpReadingService {
         actorName: user.name,
         action: "mcp.image.annotated",
         targetId: page.id,
-        details: `${publication.id}; page ${input.page}; metadata version ${input.expectedVersion + 1}`,
+        details: `${publication.id}; page ${input.page}; metadata version ${input.expectedVersion + 1}${editsText ? "; alt/story text updated" : ""}`,
         createdAt: now,
       },
     );
@@ -239,7 +247,49 @@ export class McpReadingService {
       "Tags changed since the page was read. Read it again before updating.",
       409,
     );
-    return { page: input.page, version: input.expectedVersion + 1, ...labels };
+    const written = editsText
+      ? await this.writePageText(publication.id, page.id, text)
+      : page;
+    return {
+      page: input.page,
+      annotationVersion: input.expectedVersion + 1,
+      version: input.expectedVersion + 1,
+      ...labels,
+      alt: written.alt,
+      storyText: written.storyText ?? "",
+    };
+  }
+  // Alt and story text live on the page itself, guarded by the publication version; an author
+  // saving in the meantime only bumps that version, so re-read and retry a few times.
+  private async writePageText(
+    comicId: string,
+    pageId: string,
+    text: { alt?: string; storyText?: string },
+  ) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const publication = await this.publications.find(comicId);
+      const page = publication
+        ? await this.publications.pageById(comicId, pageId)
+        : null;
+      ensure(publication && page, "NOT_FOUND", "Page not found.", 404);
+      const alt = text.alt ?? page.alt;
+      const storyText = text.storyText ?? page.storyText ?? "";
+      if (
+        await this.publications.editPage(
+          comicId,
+          publication.version,
+          pageId,
+          alt,
+          storyText,
+        )
+      )
+        return { ...page, alt, storyText };
+    }
+    throw new AppError(
+      "CONFLICT",
+      "Tags were saved, but the alt/story text could not be written because this page is not editable right now (for example, its chapter is awaiting review). Try again later.",
+      409,
+    );
   }
   async references(
     user: User,
