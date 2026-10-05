@@ -252,7 +252,13 @@ export class McpAuthService {
       "Consent request is missing or no longer available. Restart the connection from your AI application.",
     );
     ensure(
-      ticket.userId === user.id,
+      // Imported accounts can retain BSON IDs. Separate Mongo reads produce
+      // different objects for the same ID; compare values, preserving ID type
+      // so a string ID cannot impersonate an ObjectId with the same text.
+      ticket.userId != null &&
+        user.id != null &&
+        typeof ticket.userId === typeof user.id &&
+        String(ticket.userId) === String(user.id),
       "invalid_request",
       "The signed-in account changed. Restart the connection with the same administrator account.",
     );

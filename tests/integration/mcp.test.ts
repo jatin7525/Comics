@@ -2,6 +2,7 @@ import { before, beforeEach, after, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
+import { ObjectId } from "mongodb";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { MongoMcp } from "../../src/infrastructure/mongo/mcp";
@@ -668,4 +669,47 @@ it("distinguishes expired consent from settings invalidation", async () => {
     () => auth.approve(admin, invalidated.ticket, true),
     /Connection settings changed/,
   );
+});
+
+it("keeps BSON administrator identity across consent and token requests", async () => {
+  const id = new ObjectId();
+  await (await database()).collection("accounts").insertOne({
+    _id: id,
+    name: "Imported administrator",
+    email: "imported-admin@mcp.invalid",
+    role: "admin",
+    status: "active",
+    createdAt: new Date(),
+    passwordHash: "unused-test-hash",
+  });
+  const account = await accounts.findByEmail("imported-admin@mcp.invalid");
+  assert.ok(account);
+  const firstRequestUser = await auth.activeUser(account.id);
+  const c = await connection("comics:read", firstRequestUser);
+  const tokens = await auth.exchange(c.body);
+  const principal = await auth.authenticate(tokens.access_token);
+  assert.equal(String(principal.user.id), id.toHexString());
+
+  const consent = await auth.consent(firstRequestUser, c.query);
+  await assert.rejects(
+    () => auth.approve(admin, consent.ticket, true),
+    /signed-in account changed/,
+  );
+  const stringIdAdmin = {
+    ...admin,
+    id: id.toHexString(),
+    email: "string-id-admin@mcp.invalid",
+  };
+  await accounts.create({ ...stringIdAdmin, passwordHash: "unused-test-hash" });
+  await assert.rejects(
+    () => auth.approve(stringIdAdmin, consent.ticket, true),
+    /signed-in account changed/,
+  );
+  const nextRequestUser = await auth.activeUser(account.id);
+  assert.notEqual(firstRequestUser.id, nextRequestUser.id);
+  assert.equal(String(firstRequestUser.id), String(nextRequestUser.id));
+  const callback = new URL(
+    await auth.approve(nextRequestUser, consent.ticket, true),
+  );
+  assert.ok(callback.searchParams.get("code"));
 });
