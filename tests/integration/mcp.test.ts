@@ -121,10 +121,14 @@ after(async () => {
   await (await database()).dropDatabase();
   await closeMongo();
 });
-async function connection(scope = "comics:read", user = admin) {
+async function connection(
+  scope = "comics:read",
+  user = admin,
+  dynamic = false,
+) {
   const { client } = await auth.register(
     { name: "Test AI", redirectUris: ["http://127.0.0.1:4200/callback"] },
-    admin,
+    dynamic ? undefined : admin,
   );
   const verifier = "a".repeat(64);
   const query = new URLSearchParams({
@@ -286,19 +290,17 @@ it("rotates refresh tokens and revokes a family after replay", async () => {
   await assert.rejects(() => auth.exchange(form), /reuse detected/);
   await assert.rejects(() => auth.authenticate(second.access_token), /revoked/);
 });
-it("blocks clients pending approval and enforces confidential-client credentials", async () => {
+it("connects dynamically registered clients through admin consent and enforces client credentials", async () => {
   await auth.configure(admin, { ...defaults, registrationEnabled: true });
-  const pending = await auth.register({
-    name: "Pending AI",
-    redirectUris: ["https://client.example/callback"],
-  });
-  await assert.rejects(
-    () => auth.approvedClient(pending.client.id),
-    /approval/,
-  );
-  await auth.clientStatus(admin, pending.client.id, "approved");
-  await auth.approvedClient(pending.client.id);
-  const c = await connection();
+  const c = await connection("comics:read", admin, true);
+  assert.equal(c.client.status, "approved");
+  await assert.rejects(() => auth.consent(reader, c.query));
+  await assert.rejects(() => auth.consent(author, c.query));
+  const denied = await auth.consent(admin, c.query);
+  const callback = new URL(await auth.approve(admin, denied.ticket, false));
+  assert.equal(callback.searchParams.get("error"), "access_denied");
+  assert.equal(callback.searchParams.has("code"), false);
+  await assert.rejects(() => auth.approve(admin, denied.ticket, true));
   await (
     await database()
   )

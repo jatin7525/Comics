@@ -127,9 +127,6 @@ export const register = (request: Request) =>
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
         scope: input.scope ?? MCP_SCOPE,
-        approval_status: "pending",
-        approval_message:
-          "An administrator must approve this client before authorization. Reuse this client_id after approval.",
       },
       201,
     );

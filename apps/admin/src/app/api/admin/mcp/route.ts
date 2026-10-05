@@ -5,6 +5,7 @@ import { z } from "zod";
 import { settingsSchema, clientSchema } from "@/domain/mcp/models";
 import { mcpServices } from "@/server/mcp/services";
 const commandSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("enable") }),
   z.object({ action: z.literal("settings"), settings: settingsSchema }),
   z.object({ action: z.literal("client"), client: clientSchema }),
   z.object({
@@ -27,8 +28,25 @@ export const POST = api(
     ensure(serviceId() === "admin", "NOT_FOUND", "Not found.", 404);
     const input = await jsonInput(context.request, commandSchema);
     const user = actor(context);
-    const { auth } = mcpServices();
+    const { auth, repository } = mcpServices();
     switch (input.action) {
+      case "enable": {
+        const current = await repository.settings();
+        const settings = settingsSchema.parse({
+          enabled: current.enabled,
+          registrationEnabled: current.registrationEnabled,
+          annotationsEnabled: current.annotationsEnabled,
+          previewEnabled: current.previewEnabled,
+          allowedOrigins: current.allowedOrigins,
+          allowedPublicationIds: current.allowedPublicationIds,
+        });
+        await auth.configure(user, {
+          ...settings,
+          enabled: true,
+          registrationEnabled: true,
+        });
+        break;
+      }
       case "settings":
         await auth.configure(user, input.settings);
         break;

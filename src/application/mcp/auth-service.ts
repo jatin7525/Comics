@@ -123,7 +123,8 @@ export class McpAuthService {
       name: data.name,
       redirectUris: [...new Set(data.redirectUris)],
       secretHash: clientSecret ? hash(clientSecret) : null,
-      status: admin ? "approved" : "pending",
+      // Registration identifies a client; admin consent is still required for access.
+      status: "approved",
       revision: 1,
       createdAt: new Date(),
     };

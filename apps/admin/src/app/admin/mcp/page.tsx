@@ -14,18 +14,11 @@ export default async function McpAdministration() {
     <>
       <Intro
         title="AI connections."
-        description="Control which AI clients can read comics and, with a separate permission, organize image references."
+        description="One URL to connect your AI application to your comics."
       />
       <McpSettingsPanel
         settings={settings}
         endpoint={resource}
-        clients={clients.map((c) => ({
-          id: c.id,
-          name: c.name,
-          redirectUris: c.redirectUris,
-          confidential: !!c.secretHash,
-          status: c.status,
-        }))}
         grants={grants.map((g) => ({
           id: g.id,
           name: g.name,
