@@ -253,7 +253,14 @@ export class McpAuthService {
     });
     return { ticket, client, scope: request.scope };
   }
-  async approve(user: User, rawTicket: string, allow: boolean) {
+  // `keep` lists the optional scopes the administrator left ticked on the consent screen;
+  // it can only narrow the request. Omitted, every requested scope is granted.
+  async approve(
+    user: User,
+    rawTicket: string,
+    allow: boolean,
+    keep?: string[],
+  ) {
     const settings = await this.enabled();
     const ticket = await this.repository.ticket(hash(rawTicket));
     ensure(
@@ -326,6 +333,12 @@ export class McpAuthService {
     const code = secret();
     await this.repository.createTicket({
       ...ticket,
+      scope: keep
+        ? ticket.scope
+            .split(" ")
+            .filter((scope) => scope === MCP_SCOPE || keep.includes(scope))
+            .join(" ")
+        : ticket.scope,
       id: hash(code),
       kind: "code",
       grantId: randomUUID(),

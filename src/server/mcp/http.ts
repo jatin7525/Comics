@@ -6,6 +6,7 @@ import { getServices } from "../services";
 import { mcpServices } from "./services";
 import { serviceId } from "../service";
 import { knownMcpOrigin } from "@/domain/mcp/origins";
+import { MCP_SCOPE } from "@/domain/mcp/models";
 
 export function json(body: unknown, status = 200) {
   return Response.json(body, {
@@ -79,14 +80,25 @@ export async function boundary(
       known ? error.status : error instanceof ZodError ? 400 : 500,
     );
     if (response.status === 401) {
+      // Clients such as Claude request exactly this scope, so advertise every optional scope the
+      // platform currently allows; the administrator can still untick them on the consent screen.
+      const scope = await advertisedScope().catch(() => MCP_SCOPE);
       response.headers.set(
         "WWW-Authenticate",
-        `Bearer resource_metadata="${mcpServices().origin}/.well-known/oauth-protected-resource/mcp", scope="comics:read"`,
+        `Bearer resource_metadata="${mcpServices().origin}/.well-known/oauth-protected-resource/mcp", scope="${scope}"`,
       );
     }
     if (response.status === 429) response.headers.set("Retry-After", "60");
     return await cors(request, response).catch(() => response);
   }
+}
+async function advertisedScope() {
+  const settings = await mcpServices().repository.settings();
+  return [
+    MCP_SCOPE,
+    ...(settings.annotationsEnabled ? ["comics:annotate"] : []),
+    ...(settings.previewEnabled ? ["comics:preview"] : []),
+  ].join(" ");
 }
 export async function formInput(request: Request) {
   ensure(

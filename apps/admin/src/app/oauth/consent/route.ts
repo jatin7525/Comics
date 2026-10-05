@@ -22,6 +22,11 @@ export const POST = (request: Request) =>
       user,
       body.get("ticket") ?? "",
       body.get("decision") === "allow",
+      body.get("choose") === "1"
+        ? ["comics:annotate", "comics:preview"].filter(
+            (scope) => body.get(scope) === "on",
+          )
+        : undefined,
     );
     return new Response(null, {
       status: 303,

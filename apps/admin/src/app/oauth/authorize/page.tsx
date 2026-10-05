@@ -47,7 +47,7 @@ export default async function Authorize({
   return (
     <section className="panel" style={{ maxWidth: 640, margin: "40px auto" }}>
       <span className="tag">
-        AI connection · {annotate ? "Image annotations" : "Read only"}
+        AI connection · {annotate ? "Image tagging available" : "Read only"}
       </span>
       <h1>Connect {consent.client.name}?</h1>
       <p>
@@ -58,34 +58,42 @@ export default async function Authorize({
         It cannot upload, publish, delete, buy comics, comment, or change your
         account.
       </p>
-      {preview && (
-        <p>
-          <strong>
-            You are also granting admin access to private drafts and unpublished
-            chapter images and text.
-          </strong>
-        </p>
-      )}
-      {annotate && (
-        <p>
-          <strong>
-            You are also granting permission to update per-image character tags,
-            visual tags and descriptions. These changes are recorded in the
-            admin audit log.
-          </strong>
-        </p>
-      )}
       <p>
         The connection lasts up to 30 days. An administrator can revoke it at
         any time. Only continue if you trust this client with the comic content.
       </p>
+      {(annotate || preview) && (
+        <p>
+          Reading is always included. Untick anything you don’t want to grant.
+        </p>
+      )}
       <p className="muted">
         Callback: {new URL(query.get("redirect_uri")!).origin}
       </p>
       <form action="/oauth/consent" method="post">
         <input type="hidden" name="ticket" value={consent.ticket} />
+        <input type="hidden" name="choose" value="1" />
+        {annotate && (
+          <label className="consent-scope">
+            <input type="checkbox" name="comics:annotate" defaultChecked />
+            <span>
+              <strong>Image tagging.</strong> Update per-image character tags,
+              visual tags and descriptions. These changes are recorded in the
+              admin audit log.
+            </span>
+          </label>
+        )}
+        {preview && (
+          <label className="consent-scope">
+            <input type="checkbox" name="comics:preview" defaultChecked />
+            <span>
+              <strong>Draft preview.</strong> Admin access to private drafts and
+              unpublished chapter images and text.
+            </span>
+          </label>
+        )}
         <button className="primary" name="decision" value="allow">
-          Allow {annotate ? "reading and annotations" : "read-only access"}
+          Allow
         </button>{" "}
         <button className="secondary" name="decision" value="deny">
           Cancel
