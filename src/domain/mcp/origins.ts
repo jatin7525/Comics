@@ -1,6 +1,7 @@
 // These hosted clients still need OAuth and explicit administrator consent.
 const clientOrigins = [
   "https://claude.ai",
+  "https://claude.com",
   "https://chatgpt.com",
   "https://grok.com",
 ];

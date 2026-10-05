@@ -7,6 +7,7 @@ it("recognizes hosted AI origins without admitting lookalike sites", () => {
   for (const origin of [
     admin,
     "https://claude.ai",
+    "https://claude.com",
     "https://chatgpt.com",
     "https://grok.com",
   ])
